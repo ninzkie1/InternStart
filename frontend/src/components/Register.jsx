@@ -35,6 +35,30 @@ const Register = () => {
     e.preventDefault();
     setIsLoading(true);
 
+    if (!username || !email || !password) {
+      toast({
+        title: 'Error',
+        description: 'Please fill in all fields',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    if (password.length < 6) {
+      toast({
+        title: 'Error',
+        description: 'Password must be at least 6 characters',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      setIsLoading(false);
+      return;
+    }
+
     if (password !== confirmPassword) {
       toast({
         title: 'Error',

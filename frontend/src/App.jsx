@@ -1,11 +1,12 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ChakraProvider, Box, Flex, Spacer } from '@chakra-ui/react';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider, useAuth, AuthContext } from './context/AuthContext';
 import Login from './components/Login';
 import Register from './components/Register';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 import LogoutButton from './components/LogoutButton';
+import Dashboard from './views/Dashboard';
 
 // Separate component for the authenticated header
 const AuthHeader = () => {
@@ -24,10 +25,10 @@ const AuthHeader = () => {
 function App() {
   return (
     <ChakraProvider>
-      <AuthProvider>
-        <Box minH="100vh" bg="gray.50">
-          <AuthHeader />
-          <Router>
+      <Router>
+        <AuthProvider>
+          <Box minH="100vh" bg="gray.50">
+            <AuthHeader />
             <Routes>
               <Route
                 path="/login"
@@ -49,7 +50,7 @@ function App() {
                 path="/dashboard"
                 element={
                   <ProtectedRoute>
-                    <div>Dashboard (Protected Route)</div>
+                    <Dashboard />
                   </ProtectedRoute>
                 }
               />
@@ -60,9 +61,9 @@ function App() {
                 }
               />
             </Routes>
-          </Router>
-        </Box>
-      </AuthProvider>
+          </Box>
+        </AuthProvider>
+      </Router>
     </ChakraProvider>
   );
 }

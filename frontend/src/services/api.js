@@ -1,20 +1,20 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5001/api';
-
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: 'http://localhost:5001/api',
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
-  },
+    'Accept': 'application/json'
+  }
 });
 
-// Add a request interceptor to add the auth token to requests
+// Add request interceptor to include token in headers
 api.interceptors.request.use(
   (config) => {
-    const user = JSON.parse(localStorage.getItem('user'));
-    if (user?.data?.accessToken) {
-      config.headers.Authorization = `Bearer ${user.data.accessToken}`;
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
@@ -23,66 +23,129 @@ api.interceptors.request.use(
   }
 );
 
-// Add a response interceptor to handle token refresh
+// Add response interceptor to handle token expiration
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-
-    if (error.response.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-
-      try {
-        const user = JSON.parse(localStorage.getItem('user'));
-        const refreshToken = user?.data?.refreshToken;
-
-        if (!refreshToken) {
-          throw new Error('No refresh token available');
-        }
-
-        const response = await axios.post(`${API_URL}/auth/refresh-token`, {
-          refreshToken,
-        });
-
-        const { accessToken } = response.data.data;
-
-        // Update the stored user data with the new access token
-        user.data.accessToken = accessToken;
-        localStorage.setItem('user', JSON.stringify(user));
-
-        // Retry the original request with the new token
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-        return axios(originalRequest);
-      } catch (refreshError) {
-        // If refresh token is invalid, log out the user
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
-      }
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
     }
-
     return Promise.reject(error);
   }
 );
 
+// Auth API calls
 export const register = async (userData) => {
-  const response = await api.post('/auth/register', userData);
-  return response.data;
+  try {
+    console.log('Attempting registration with:', { username: userData.username });
+    const response = await api.post('/auth/register', userData);
+    console.log('Registration response:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Registration error:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    throw error;
+  }
 };
 
 export const login = async (credentials) => {
-  const response = await api.post('/auth/login', credentials);
-  return response.data;
+  if (!credentials?.username || !credentials?.password) {
+    throw new Error('Username and password are required');
+  }
+
+  try {
+    console.log('Attempting login with:', { username: credentials.username });
+    const response = await api.post('/auth/login', credentials);
+    console.log('Login response:', response.data);
+    
+    if (!response.data || !response.data.token) {
+      throw new Error('Invalid login response from server');
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('Login error:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    throw error;
+  }
 };
 
 export const logout = async () => {
-  const response = await api.post('/auth/logout');
-  return response.data;
+  try {
+    const response = await api.post('/auth/logout');
+    return response.data;
+  } catch (error) {
+    console.error('Logout error:', error);
+    throw error;
+  }
 };
 
 export const getProfile = async () => {
-  const response = await api.get('/auth/profile');
-  return response.data;
+  try {
+    const response = await api.get('/auth/profile');
+    return response.data;
+  } catch (error) {
+    console.error('Get profile error:', error);
+    throw error;
+  }
+};
+
+// Intern Log APIs
+export const timeIn = async (data) => {
+  try {
+    const response = await api.post('/intern-logs/time-in', data);
+    return response.data;
+  } catch (error) {
+    console.error('Time in error:', error);
+    throw error.response?.data || error;
+  }
+};
+
+export const timeOut = async (data) => {
+  try {
+    const response = await api.post('/intern-logs/time-out', data);
+    return response.data;
+  } catch (error) {
+    console.error('Time out error:', error);
+    throw error.response?.data || error;
+  }
+};
+
+export const getTodayLog = async () => {
+  try {
+    const response = await api.get('/intern-logs/today');
+    return response.data;
+  } catch (error) {
+    console.error('Get today log error:', error);
+    throw error.response?.data || error;
+  }
+};
+
+export const getLogs = async () => {
+  try {
+    const response = await api.get('/intern-logs');
+    return response.data;
+  } catch (error) {
+    console.error('Get logs error:', error);
+    throw error.response?.data || error;
+  }
+};
+
+export const updateLogDescription = async (logId, description) => {
+  try {
+    const response = await api.patch(`/intern-logs/${logId}/description`, { description });
+    return response.data;
+  } catch (error) {
+    console.error('Update log description error:', error);
+    throw error.response?.data || error;
+  }
 };
 
 export default api; 
