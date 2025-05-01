@@ -7,6 +7,7 @@ const { errorHandler } = require('./middleware/error.middleware');
 const logger = require('./middleware/logger.middleware');
 const authRoutes = require('./routes/authRoutes');
 const internLogRoutes = require('./routes/internLogRoutes');
+const organizationRoutes = require('./routes/organizationRoutes');
 const { connectDB } = require('./config/database');
 
 const app = express();
@@ -38,6 +39,7 @@ app.use(compression());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/organizations', organizationRoutes);
 app.use('/api/intern-logs', internLogRoutes);
 
 // Error handling

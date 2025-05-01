@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login as apiLogin, logout as apiLogout, getProfile } from '../services/api';
+import api from '../config/axios';
 
-export const AuthContext = createContext();
+const AuthContext = createContext(null);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -15,97 +15,105 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     const checkAuth = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          setUser(null);
-          setLoading(false);
-          return;
-        }
-
-        // If we already have a user, don't make an unnecessary profile request
-        if (user) {
-          setLoading(false);
-          return;
-        }
-
-        const userData = await getProfile();
-        setUser(userData);
-        setError(null);
-      } catch (error) {
-        console.error('Auth check failed:', error);
-        // Only clear auth state if it's an authentication error (401)
-        if (error.response?.status === 401) {
-          setUser(null);
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const response = await api.get('/auth/profile', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          setUser(response.data);
+        } catch (error) {
+          console.error('Auth check failed:', error);
           localStorage.removeItem('token');
-          setError('Authentication failed');
+          setUser(null);
+          navigate('/login');
         }
-      } finally {
-        setLoading(false);
       }
+      setLoading(false);
     };
 
     checkAuth();
-  }, [user]);
+  }, [navigate]);
 
-  const login = async (credentials) => {
+  const login = async (username, password) => {
     try {
-      console.log('AuthContext: Processing login...', credentials);
-      setError(null);
+      const response = await api.post('/auth/login', {
+        username,
+        password
+      });
+
+      const { token, user } = response.data;
       
-      // If credentials contains token and user, it means we're already logged in
-      if (credentials.token && credentials.user) {
-        localStorage.setItem('token', credentials.token);
-        setUser(credentials.user);
-        return credentials.user;
+      if (!token || !user) {
+        throw new Error('Invalid response from server');
       }
 
-      // Otherwise, make the login request
-      const response = await apiLogin(credentials);
-      
-      if (!response || !response.token) {
-        throw new Error('Invalid login response');
-      }
-
-      const { token, user: userData } = response;
-      
       localStorage.setItem('token', token);
-      setUser(userData);
-      return userData;
+      setUser(user);
+      console.log('Logged in user:', user);
+
+      // Redirect based on role
+      if (user.role === 'leader') {
+        navigate('/leader-dashboard');
+      } else {
+        navigate('/dashboard');
+      }
+      
+      return { success: true };
     } catch (error) {
-      console.error('AuthContext: Login error:', error);
-      setUser(null);
-      localStorage.removeItem('token');
-      setError(error.message);
-      throw error;
+      console.error('Login failed:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Login failed'
+      };
     }
   };
 
-  const logout = async () => {
+  const register = async (userData) => {
     try {
-      await apiLogout();
+      const response = await api.post('/auth/register', userData);
+      const user = response.data;
+      setUser(user);
+      // Redirect based on role
+      if (user.role === 'leader') {
+        navigate('/leader-dashboard');
+      } else {
+        navigate('/dashboard');
+      }
+      return { success: true };
     } catch (error) {
-      console.error('AuthContext: Logout error:', error);
-    } finally {
-      setUser(null);
-      setError(null);
-      localStorage.removeItem('token');
-      navigate('/login');
+      console.error('Registration failed:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Registration failed'
+      };
     }
   };
 
-  if (loading) {
-    return <div>Loading...</div>;
-  }
+  const logout = () => {
+    localStorage.removeItem('token');
+    setUser(null);
+    navigate('/login');
+  };
+
+  const value = {
+    user,
+    loading,
+    isAuthenticated: !!user,
+    login,
+    register,
+    logout
+  };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout, error }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
-}; 
+};
+
+export default AuthContext; 

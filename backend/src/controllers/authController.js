@@ -6,53 +6,57 @@ const jwt = require('jsonwebtoken');
 // @route   POST /api/auth/register
 // @access  Public
 const registerUser = async (req, res) => {
-  const { username, email, password } = req.body;
   try {
-    if (!username || !email || !password) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
+    const { username, email, password, role, inviteCode } = req.body;
 
-    if (password.length < 6) {
-      return res.status(400).json({ message: "Password must be at least 6 characters" });
-    }
-
-    const userExists = await User.findOne({ $or: [{ email }, { username }] });
-
+    // Check if user exists
+    const userExists = await User.findOne({ email });
     if (userExists) {
-      return res.status(400).json({ message: "User already exists with this email or username" });
+      return res.status(400).json({ 
+        message: 'User already exists',
+        action: 'login',
+        email 
+      });
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
+    // Create user with the provided role or default to 'intern'
     const user = await User.create({
       username,
       email,
-      password: hashedPassword,
+      password,
+      role: role || 'intern' // Use the role from request body if provided, otherwise default to 'intern'
     });
 
-    if (user) {
-      const token = jwt.sign(
-        { userId: user._id },
-        process.env.JWT_SECRET,
-        { expiresIn: '7d' }
-      );
+    // Generate token
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
 
-      res.status(201).json({
-        token,
-        user: {
-          _id: user._id,
-          username: user.username,
-          email: user.email,
-          profilePic: user.profilePic,
-        }
-      });
-    } else {
-      res.status(400).json({ message: "Invalid user data" });
-    }
+    // Set HTTP-only cookie
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+    });
+
+    // Return user data without password
+    const userData = {
+      _id: user._id,
+      username: user.username,
+      email: user.email,
+      role: user.role
+    };
+
+    res.status(201).json({
+      ...userData,
+      inviteCode, // Return invite code if it was provided during registration
+      message: 'Registration successful'
+    });
   } catch (error) {
-    console.log("Error in register controller:", error.message);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(400).json({ message: error.message });
   }
 };
 
@@ -60,49 +64,64 @@ const registerUser = async (req, res) => {
 // @route   POST /api/auth/login
 // @access  Public
 const loginUser = async (req, res) => {
-  const { username, password } = req.body;
   try {
+    const { username, password } = req.body;
+
+    // Check if user exists
     const user = await User.findOne({ username });
-
     if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(401).json({ 
+        message: 'User not found',
+        action: 'register',
+        username 
+      });
     }
 
-    const isPasswordCorrect = await bcrypt.compare(password, user.password);
-    if (!isPasswordCorrect) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    // Check password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    // Generate token
     const token = jwt.sign(
       { userId: user._id },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      { expiresIn: '30d' }
     );
 
-    res.status(200).json({
+    // Return user data without password
+    const userData = {
+      _id: user._id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      organization: user.organization
+    };
+
+    res.json({
       token,
-      user: {
-        _id: user._id,
-        username: user.username,
-        email: user.email,
-        profilePic: user.profilePic,
-      }
+      user: userData,
+      message: 'Login successful'
     });
   } catch (error) {
-    console.error("Login error:", error.message);
-    res.status(500).json({ message: "Internal Server Error" });
+    console.error('Login error:', error);
+    res.status(400).json({ message: error.message });
   }
 };
 
 // @desc    Logout user
 // @route   POST /api/auth/logout
 // @access  Private
-const logoutUser = (req, res) => {
+const logoutUser = async (req, res) => {
   try {
-    res.status(200).json({ message: "Logged out successfully" });
+    res.cookie('token', '', {
+      httpOnly: true,
+      expires: new Date(0)
+    });
+    res.json({ message: 'Logged out successfully' });
   } catch (error) {
-    console.log("Error in logout controller:", error.message);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -111,17 +130,77 @@ const logoutUser = (req, res) => {
 // @access  Private
 const getUserProfile = async (req, res) => {
   try {
-    console.log('Getting profile for user:', req.user); // Debug log
-
-    const user = await User.findById(req.user._id).select("-password");
-    if (user) {
-      res.status(200).json(user);
-    } else {
-      res.status(404).json({ message: "User not found" });
+    const user = await User.findById(req.user._id)
+      .select('-password')
+      .populate('organization');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
     }
+
+    res.json(user);
   } catch (error) {
-    console.error("Error in get profile controller:", error);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Google OAuth login/register
+const handleGoogleAuth = async (req, res) => {
+  try {
+    const { email, name, googleId, inviteCode } = req.body;
+
+    // Check if user exists
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      // Create new user if doesn't exist
+      user = await User.create({
+        username: name,
+        email,
+        googleId,
+        password: await bcrypt.hash(Math.random().toString(36), 10), // Random password for Google users
+        role: 'intern'
+      });
+    } else {
+      // Update existing user's googleId if not set
+      if (!user.googleId) {
+        user.googleId = googleId;
+        await user.save();
+      }
+    }
+
+    // Generate token
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    // Set HTTP-only cookie
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+    });
+
+    // Return user data
+    const userData = {
+      _id: user._id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      organization: user.organization
+    };
+
+    res.json({
+      ...userData,
+      inviteCode,
+      message: 'Google authentication successful'
+    });
+  } catch (error) {
+    console.error('Google auth error:', error);
+    res.status(400).json({ message: error.message });
   }
 };
 
@@ -130,4 +209,5 @@ module.exports = {
   loginUser,
   logoutUser,
   getUserProfile,
+  handleGoogleAuth
 }; 

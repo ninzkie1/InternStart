@@ -4,13 +4,15 @@ const {
   registerUser,
   loginUser,
   getUserProfile,
-  logoutUser
+  logoutUser,
+  handleGoogleAuth
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 
 // Public routes
 router.post('/register', registerUser);
 router.post('/login', loginUser);
+router.post('/google', handleGoogleAuth);
 
 // Protected routes
 router.get('/profile', protect, getUserProfile);

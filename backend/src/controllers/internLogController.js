@@ -5,22 +5,24 @@ const InternLog = require('../models/InternLog');
 // @access  Private
 const timeIn = async (req, res) => {
   try {
-    // Check if there's an ongoing session
+    // Check if there's an ongoing session in the same organization
     const ongoingLog = await InternLog.findOne({
       user: req.user._id,
+      organization: req.body.organizationId,
       status: 'ongoing'
     });
 
     if (ongoingLog) {
       return res.status(400).json({
         success: false,
-        message: 'You already have an ongoing session'
+        message: 'You already have an ongoing session in this organization'
       });
     }
 
     // Create new log
     const log = await InternLog.create({
       user: req.user._id,
+      organization: req.body.organizationId,
       timeIn: new Date(),
       date: new Date().setHours(0, 0, 0, 0),
       description: req.body.description || ''
@@ -48,6 +50,7 @@ const timeOut = async (req, res) => {
     // Find ongoing session
     const log = await InternLog.findOne({
       user: req.user._id,
+      organization: req.body.organizationId,
       status: 'ongoing'
     });
 
@@ -131,6 +134,7 @@ const getTodayLog = async (req, res) => {
 
     const log = await InternLog.findOne({
       user: req.user._id,
+      organization: req.query.organizationId,
       date: today
     });
 
@@ -154,7 +158,8 @@ const getTodayLog = async (req, res) => {
 const getLogs = async (req, res) => {
   try {
     const logs = await InternLog.find({
-      user: req.user._id
+      user: req.user._id,
+      organization: req.query.organizationId
     }).sort({ date: -1 });
 
     res.json({

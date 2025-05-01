@@ -1,71 +1,69 @@
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ChakraProvider, Box, Flex, Spacer } from '@chakra-ui/react';
-import { AuthProvider, useAuth, AuthContext } from './context/AuthContext';
+import { ThemeProvider } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import theme from './theme';
+import { AuthProvider } from './context/AuthContext';
 import Login from './components/Login';
 import Register from './components/Register';
-import ProtectedRoute from './components/ProtectedRoute';
-import PublicRoute from './components/PublicRoute';
-import LogoutButton from './components/LogoutButton';
 import Dashboard from './views/Dashboard';
+import LeaderDashboard from './components/LeaderDashboard';
+import PrivateRoute from './components/PrivateRoute';
+import JoinOrganization from './pages/JoinOrganization';
+import LeaderAnalysis from './components/LeaderAnalysis';
 
-// Separate component for the authenticated header
-const AuthHeader = () => {
-  const { isAuthenticated } = useAuth();
-  
-  if (!isAuthenticated) return null;
-  
+// Add favicon and page title
+if (typeof document !== 'undefined') {
+  const favicon = document.createElement('link');
+  favicon.rel = 'icon';
+  favicon.type = 'image/png';
+  favicon.href = '/img/internstartlogo.png';
+  document.head.appendChild(favicon);
+  document.title = 'InternStart';
+}
+
+const App = () => {
   return (
-    <Flex p={4} bg="white" shadow="sm">
-      <Spacer />
-      <LogoutButton />
-    </Flex>
+    <Router>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/join/:inviteCode" element={<JoinOrganization />} />
+            <Route path="/join-organization/:inviteCode" element={<JoinOrganization />} />
+            <Route path="/join-organization/org/:inviteCode" element={<JoinOrganization />} />
+            <Route
+              path="/dashboard"
+              element={
+                <PrivateRoute>
+                  <Dashboard />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/leader-dashboard"
+              element={
+                <PrivateRoute>
+                  <LeaderDashboard />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/leader-dashboard/analysis"
+              element={
+                <PrivateRoute>
+                  <LeaderAnalysis />
+                </PrivateRoute>
+              }
+            />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </AuthProvider>
+      </ThemeProvider>
+    </Router>
   );
 };
-
-function App() {
-  return (
-    <ChakraProvider>
-      <Router>
-        <AuthProvider>
-          <Box minH="100vh" bg="gray.50">
-            <AuthHeader />
-            <Routes>
-              <Route
-                path="/login"
-                element={
-                  <PublicRoute>
-                    <Login />
-                  </PublicRoute>
-                }
-              />
-              <Route
-                path="/register"
-                element={
-                  <PublicRoute>
-                    <Register />
-                  </PublicRoute>
-                }
-              />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/"
-                element={
-                  <Navigate to="/dashboard" replace />
-                }
-              />
-            </Routes>
-          </Box>
-        </AuthProvider>
-      </Router>
-    </ChakraProvider>
-  );
-}
 
 export default App;

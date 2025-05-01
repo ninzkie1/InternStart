@@ -2,75 +2,118 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Button,
-  VStack,
-  Text,
-  useToast,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
   Container,
-  Heading,
+  Typography,
   Card,
-  CardBody,
+  CardContent,
   Stack,
   Divider,
-  Badge,
-  Stat,
-  StatLabel,
-  StatNumber,
-  StatGroup,
-  Textarea,
+  Grid,
+  TextField,
   IconButton,
-  useDisclosure,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  ModalCloseButton,
-  Input,
-  InputGroup,
-  InputLeftElement,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
   Select,
-  HStack,
-  ButtonGroup,
-  AlertDialog,
-  AlertDialogBody,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogContent,
-  AlertDialogOverlay,
+  MenuItem,
+  InputLabel,
+  FormControl,
+  InputAdornment,
   Tooltip,
-} from '@chakra-ui/react';
-import { EditIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, DeleteIcon } from '@chakra-ui/icons';
-import { timeIn, timeOut, getTodayLog, getLogs } from '../services/api';
+  Alert,
+  AlertTitle,
+  CircularProgress,
+  useTheme,
+  Snackbar,
+  Avatar,
+  TablePagination,
+} from '@mui/material';
+import {
+  Edit as EditIcon,
+  Search as SearchIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  Delete as DeleteIcon,
+  AccessTime as TimeIcon,
+  Check as CheckIcon,
+  Timer as TimerIcon,
+  History as HistoryIcon,
+  Today as TodayIcon,
+} from '@mui/icons-material';
+import { timeIn, timeOut, getTodayLog, getLogs, updateLogDescription } from '../services/api';
 import axios from 'axios';
+import Todo from '../components/Todo';
+import { styled } from '@mui/material/styles';
+import LogoutButton from '../components/LogoutButton';
+import { useAuth } from '../context/AuthContext';
+import OrganizationSwitcher from '../components/OrganizationSwitcher';
+
+// Styled components
+const StyledCard = styled(Card)(({ theme }) => ({
+  boxShadow: theme.shadows[3],
+  borderRadius: theme.shape.borderRadius * 2,
+  height: '100%',
+}));
+
+const StyledStatCard = styled(Card)(({ theme }) => ({
+  backgroundColor: theme.palette.primary.light,
+  color: theme.palette.primary.contrastText,
+  padding: theme.spacing(2),
+  borderRadius: theme.shape.borderRadius * 2,
+}));
 
 const Dashboard = () => {
-  const [isLoading, setIsLoading] = useState(false);
+  const { user } = useAuth();
+  const [selectedOrganization, setSelectedOrganization] = useState(null);
   const [todayLog, setTodayLog] = useState(null);
   const [logs, setLogs] = useState([]);
   const [currentDuration, setCurrentDuration] = useState(0);
   const [totalDuration, setTotalDuration] = useState(0);
   const [description, setDescription] = useState('');
   const [editingLog, setEditingLog] = useState(null);
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const toast = useToast();
+  const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredLogs, setFilteredLogs] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [entriesPerPage, setEntriesPerPage] = useState(5);
+  const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [logToDelete, setLogToDelete] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
   const cancelRef = React.useRef();
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
+
+  const theme = useTheme();
+
+  const handleCloseSnackbar = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
+
+  const showNotification = (message, severity = 'success') => {
+    setSnackbar({
+      open: true,
+      message,
+      severity
+    });
+  };
 
   const fetchTodayLog = useCallback(async () => {
+    if (!selectedOrganization) return;
+
     try {
-      const response = await getTodayLog();
+      const response = await getTodayLog(selectedOrganization._id);
       
       // If no log found for today but there's an ongoing session in the logs,
       // use that as today's log
@@ -91,19 +134,15 @@ const Dashboard = () => {
       setTodayLog(response.data);
     } catch (error) {
       console.error('Error fetching today\'s log:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch today\'s log',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
+      showNotification('Failed to fetch today\'s log', 'error');
     }
-  }, [logs]);
+  }, [logs, selectedOrganization]);
 
   const fetchLogs = useCallback(async () => {
+    if (!selectedOrganization) return;
+
     try {
-      const response = await getLogs();
+      const response = await getLogs(selectedOrganization._id);
       setLogs(response.data);
 
       // Calculate total duration from all completed logs
@@ -113,15 +152,9 @@ const Dashboard = () => {
       setTotalDuration(total);
     } catch (error) {
       console.error('Error fetching logs:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch logs history',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
+      showNotification('Failed to fetch logs history', 'error');
     }
-  }, []);
+  }, [selectedOrganization]);
 
   // Update current duration every second if there's an ongoing session
   useEffect(() => {
@@ -159,6 +192,7 @@ const Dashboard = () => {
 
   // Initial data fetch
   useEffect(() => {
+    if (selectedOrganization) {
     fetchTodayLog();
     fetchLogs();
 
@@ -169,7 +203,8 @@ const Dashboard = () => {
     }, 300000); // Changed from 60000 to 300000 (5 minutes)
 
     return () => clearInterval(refreshInterval);
-  }, [fetchTodayLog, fetchLogs]);
+    }
+  }, [fetchTodayLog, fetchLogs, selectedOrganization]);
 
   useEffect(() => {
     // Filter logs based on search query
@@ -200,67 +235,55 @@ const Dashboard = () => {
   const totalPages = Math.ceil(filteredLogs.length / entriesPerPage);
 
   // Handle page changes
-  const handlePageChange = (newPage) => {
-    setCurrentPage(newPage);
+  const handlePageChange = (event, newPage) => {
+    setCurrentPage(newPage + 1);
   };
 
   // Handle entries per page change
   const handleEntriesPerPageChange = (event) => {
-    setEntriesPerPage(Number(event.target.value));
+    setEntriesPerPage(parseInt(event.target.value, 10));
     setCurrentPage(1); // Reset to first page when changing entries per page
   };
 
   const handleTimeIn = async () => {
+    if (!selectedOrganization) {
+      showNotification('Please select an organization first', 'error');
+      return;
+    }
+
     setIsLoading(true);
     try {
       console.log('Recording time in...');
-      await timeIn({ description });
+      await timeIn({ description, organizationId: selectedOrganization._id });
       setDescription('');
-      toast({
-        title: 'Time In recorded successfully',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
+      showNotification('Time In recorded successfully');
       await fetchTodayLog();
       await fetchLogs();
     } catch (error) {
       console.error('Error recording time in:', error);
-      toast({
-        title: 'Error',
-        description: error.response?.data?.message || 'Failed to record Time In',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
+      showNotification(error.response?.data?.message || 'Failed to record Time In', 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleTimeOut = async () => {
+    if (!selectedOrganization) {
+      showNotification('Please select an organization first', 'error');
+      return;
+    }
+
     setIsLoading(true);
     try {
       console.log('Recording time out...');
-      await timeOut({ description });
+      await timeOut({ description, organizationId: selectedOrganization._id });
       setDescription('');
-      toast({
-        title: 'Time Out recorded successfully',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
+      showNotification('Time Out recorded successfully');
       await fetchTodayLog();
       await fetchLogs();
     } catch (error) {
       console.error('Error recording time out:', error);
-      toast({
-        title: 'Error',
-        description: error.response?.data?.message || 'Failed to record Time Out',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
+      showNotification(error.response?.data?.message || 'Failed to record Time Out', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -271,36 +294,30 @@ const Dashboard = () => {
 
     setIsLoading(true);
     try {
-      await axios.patch(`/api/intern-logs/${editingLog._id}/description`, {
-        description: description
-      });
-      toast({
-        title: 'Description updated successfully',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
+      await updateLogDescription(editingLog._id, description);
+      showNotification('Description updated successfully');
       await fetchTodayLog();
       await fetchLogs();
-      onClose();
+      handleCloseDialog();
     } catch (error) {
       console.error('Error updating description:', error);
-      toast({
-        title: 'Error',
-        description: error.response?.data?.message || 'Failed to update description',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
+      showNotification(error.response?.data?.message || 'Failed to update description', 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleOpenDialog = () => setIsOpen(true);
+  const handleCloseDialog = () => {
+    setIsOpen(false);
+    setEditingLog(null);
+    setDescription('');
+  };
+
   const openEditModal = (log) => {
     setEditingLog(log);
     setDescription(log.description || '');
-    onOpen();
+    handleOpenDialog();
   };
 
   const formatDate = (date) => {
@@ -333,24 +350,13 @@ const Dashboard = () => {
     setIsLoading(true);
     try {
       await axios.delete(`/api/intern-logs/${logToDelete._id}`);
-      toast({
-        title: 'Log deleted successfully',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-      await fetchLogs(); // Refresh the logs
+      showNotification('Log deleted successfully');
+      await fetchLogs();
       setIsDeleteDialogOpen(false);
       setLogToDelete(null);
     } catch (error) {
       console.error('Error deleting log:', error);
-      toast({
-        title: 'Error',
-        description: error.response?.data?.message || 'Failed to delete log',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
+      showNotification(error.response?.data?.message || 'Failed to delete log', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -364,333 +370,433 @@ const Dashboard = () => {
   console.log('Current state:', { todayLog, logs, currentDuration });
 
   return (
-    <Container maxW="container.xl" py={8}>
-      <VStack spacing={8} align="stretch">
-        <Card>
-          <CardBody>
-            <Stack spacing={4}>
-              <Heading size="md">Today's Time Log</Heading>
-              <Divider />
-              <StatGroup>
-                <Stat>
-                  <StatLabel>Current Session</StatLabel>
-                  <StatNumber>
-                    {(todayLog?.status === 'ongoing' || logs.some(log => log.status === 'ongoing')) 
-                      ? formatDuration(currentDuration) 
-                      : '00:00:00'}
-                  </StatNumber>
-                </Stat>
-                <Stat>
-                  <StatLabel>Total Hours Worked</StatLabel>
-                  <StatNumber>
-                    {formatDuration(totalDuration)}
-                  </StatNumber>
-                </Stat>
-              </StatGroup>
-              {todayLog ? (
-                <VStack align="stretch" spacing={2}>
-                  <Text>
-                    Time In: {todayLog.timeIn ? formatDate(todayLog.timeIn) : 'Not yet recorded'}
-                  </Text>
-                  <Text>
-                    Time Out: {todayLog.timeOut ? formatDate(todayLog.timeOut) : 'Not yet recorded'}
-                  </Text>
-                  {todayLog.totalHours > 0 && (
-                    <Text>
-                      Total Duration: {formatDuration(todayLog.totalHours)}
-                    </Text>
-                  )}
-                  <Badge colorScheme={todayLog.status === 'ongoing' ? 'green' : 'blue'}>
-                    {todayLog.status}
-                  </Badge>
-                  {todayLog.description && (
-                    <Text>
-                      Description: {todayLog.description}
-                      <IconButton
-                        size="sm"
-                        icon={<EditIcon />}
-                        ml={2}
-                        onClick={() => openEditModal(todayLog)}
-                        aria-label="Edit description"
-                      />
-                    </Text>
-                  )}
-                </VStack>
-              ) : logs.some(log => log.status === 'ongoing') ? (
-                <VStack align="stretch" spacing={2}>
-                  <Text>
-                    Time In: {formatDate(logs.find(log => log.status === 'ongoing').timeIn)}
-                  </Text>
-                  <Text>
-                    Time Out: Not yet recorded
-                  </Text>
-                  <Badge colorScheme="green">ongoing</Badge>
-                </VStack>
-              ) : (
-                <Text>No time log for today</Text>
-              )}
-              <Textarea
-                placeholder="What are you working on?"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                resize="vertical"
-                rows={3}
+    <div>
+      <Box 
+        component="header" 
+        sx={{ 
+          position: 'sticky',
+          top: 0,
+          zIndex: 1100,
+          bgcolor: 'background.paper',
+          borderBottom: 1,
+          borderColor: 'divider',
+          py: 1,
+          px: 2
+        }}
+      >
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Avatar
+              src="/img/internstartlogo.png"
+              alt="Logo"
+              variant="square"
+              sx={{ width: 100, height: 100 }}
+            />
+            <Typography variant="h6" color="primary">
+              Hello, {user?.username || 'User'}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ width: 250 }}>
+              <OrganizationSwitcher
+                selectedOrganization={selectedOrganization}
+                onOrganizationChange={setSelectedOrganization}
               />
-              <Stack direction="row" spacing={4} justify="center">
-                <Button
-                  colorScheme="blue"
-                  onClick={handleTimeIn}
-                  isLoading={isLoading}
-                  isDisabled={todayLog?.status === 'ongoing' || logs.some(log => log.status === 'ongoing')}
-                >
-                  Time In
-                </Button>
-                <Button
-                  colorScheme="red"
-                  onClick={handleTimeOut}
-                  isLoading={isLoading}
-                  isDisabled={!(todayLog?.status === 'ongoing' || logs.some(log => log.status === 'ongoing'))}
-                >
-                  Time Out
-                </Button>
-              </Stack>
-            </Stack>
-          </CardBody>
-        </Card>
+            </Box>
+            <LogoutButton />
+          </Box>
+        </Box>
+      </Box>
 
-        <Card>
-          <CardBody>
-            <Stack spacing={4}>
-              <Heading size="md">Time Log History</Heading>
-              <Divider />
-              
-              <HStack justify="space-between" align="center">
-                <HStack>
-                  <Text whiteSpace="nowrap">Show</Text>
-                  <Select
-                    value={entriesPerPage}
-                    onChange={handleEntriesPerPageChange}
-                    width="70px"
-                  >
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                  </Select>
-                  <Text whiteSpace="nowrap">entries</Text>
-                </HStack>
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Grid container spacing={3}>
+        {/* Main content */}
+          <Grid item xs={12} md={8}>
+            <Stack spacing={3}>
+              {/* Today's Time Log Card */}
+              <StyledCard>
+                <CardContent>
+                  <Stack spacing={3}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="h5" component="h2">
+                        Today's Time Log
+                      </Typography>
+                      <TodayIcon color="primary" fontSize="large" />
+                    </Box>
+                <Divider />
 
-                {/* Search Input */}
-                <InputGroup maxW="300px">
-                  <InputLeftElement pointerEvents="none">
-                    <SearchIcon color="gray.300" />
-                  </InputLeftElement>
-                  <Input
-                    placeholder="Search logs..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </InputGroup>
-              </HStack>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={6}>
+                        <StyledStatCard>
+                          <Typography variant="subtitle1" gutterBottom>
+                            Current Session
+                          </Typography>
+                          <Typography variant="h4">
+                      {(todayLog?.status === 'ongoing' || logs.some(log => log.status === 'ongoing')) 
+                        ? formatDuration(currentDuration) 
+                        : '00:00:00'}
+                          </Typography>
+                          <TimerIcon sx={{ mt: 1 }} />
+                        </StyledStatCard>
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <StyledStatCard>
+                          <Typography variant="subtitle1" gutterBottom>
+                            Total Hours Worked
+                          </Typography>
+                          <Typography variant="h4">
+                      {formatDuration(totalDuration)}
+                          </Typography>
+                          <HistoryIcon sx={{ mt: 1 }} />
+                        </StyledStatCard>
+                      </Grid>
+                    </Grid>
 
-              {/* Scrollable Table */}
-              <Box 
-                overflowX="auto" 
-                overflowY="auto" 
-                maxHeight="400px"
-                css={{
-                  '&::-webkit-scrollbar': {
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '8px',
-                    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-                  },
-                  '&::-webkit-scrollbar-thumb': {
-                    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-                    borderRadius: '8px',
-                  },
-                }}
-              >
-                <Table variant="simple" size="sm">
-                  <Thead position="sticky" top={0} bg="white" zIndex={1}>
-                    <Tr>
-                      <Th>Date</Th>
-                      <Th>Time In</Th>
-                      <Th>Time Out</Th>
-                      <Th>Duration</Th>
-                      <Th>Description</Th>
-                      <Th>Status</Th>
-                      <Th>Actions</Th>
-                    </Tr>
-                  </Thead>
-                  <Tbody>
-                    {currentEntries.map((log) => (
-                      <Tr key={log._id} _hover={{ bg: "gray.50" }}>
-                        <Td whiteSpace="nowrap">{new Date(log.date).toLocaleDateString()}</Td>
-                        <Td whiteSpace="nowrap">{formatTimeOnly(log.timeIn)}</Td>
-                        <Td whiteSpace="nowrap">{log.timeOut ? formatTimeOnly(log.timeOut) : '-'}</Td>
-                        <Td whiteSpace="nowrap">{log.totalHours ? formatDuration(log.totalHours) : '-'}</Td>
-                        <Td maxW="300px" overflow="hidden" textOverflow="ellipsis">
-                          <Text noOfLines={2}>
-                            {log.description || '-'}
-                          </Text>
-                          <IconButton
-                            size="sm"
-                            icon={<EditIcon />}
-                            ml={2}
-                            onClick={() => openEditModal(log)}
-                            aria-label="Edit description"
+                {todayLog ? (
+                      <Paper sx={{ p: 3, bgcolor: 'background.default' }}>
+                        <Stack spacing={2}>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <TimeIcon color="primary" />
+                            <Typography variant="subtitle1" fontWeight="medium">
+                              Time In:
+                            </Typography>
+                            <Typography>
+                              {todayLog.timeIn ? formatDate(todayLog.timeIn) : 'Not yet recorded'}
+                            </Typography>
+                          </Box>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <TimeIcon color="error" />
+                            <Typography variant="subtitle1" fontWeight="medium">
+                              Time Out:
+                            </Typography>
+                            <Typography>
+                              {todayLog.timeOut ? formatDate(todayLog.timeOut) : 'Not yet recorded'}
+                            </Typography>
+                          </Box>
+                    {todayLog.totalHours > 0 && (
+                            <Box display="flex" alignItems="center" gap={1}>
+                              <TimerIcon color="success" />
+                              <Typography variant="subtitle1" fontWeight="medium">
+                                Total Duration:
+                              </Typography>
+                              <Typography>
+                                {formatDuration(todayLog.totalHours)}
+                              </Typography>
+                            </Box>
+                          )}
+                          <Chip
+                            label={todayLog.status}
+                            color={todayLog.status === 'ongoing' ? 'success' : 'primary'}
+                            sx={{ alignSelf: 'flex-start' }}
                           />
-                        </Td>
-                        <Td>
-                          <Badge colorScheme={log.status === 'ongoing' ? 'green' : 'blue'}>
-                            {log.status}
-                          </Badge>
-                        </Td>
-                        <Td>
-                          <HStack spacing={2}>
-                            <Tooltip label="Edit log" hasArrow>
-                              <IconButton
-                                size="sm"
-                                icon={<EditIcon />}
-                                onClick={() => openEditModal(log)}
-                                colorScheme="blue"
-                                aria-label="Edit log"
-                              />
-                            </Tooltip>
-                            <Tooltip label="Delete log" hasArrow>
-                              <IconButton
-                                size="sm"
-                                icon={<DeleteIcon />}
-                                onClick={() => openDeleteDialog(log)}
-                                colorScheme="red"
-                                aria-label="Delete log"
-                                isDisabled={log.status === 'ongoing'}
-                              />
-                            </Tooltip>
-                          </HStack>
-                        </Td>
-                      </Tr>
-                    ))}
-                  </Tbody>
-                </Table>
-              </Box>
+                        </Stack>
+                      </Paper>
+                    ) : (
+                      <Typography color="text.secondary">No time log for today</Typography>
+                    )}
 
-              {/* Pagination and Results Info */}
-              <HStack justify="space-between" align="center" pt={4}>
-                <Text fontSize="sm" color="gray.600">
-                  Showing {indexOfFirstEntry + 1} to {Math.min(indexOfLastEntry, filteredLogs.length)} of {filteredLogs.length} entries
-                </Text>
+                    <TextField
+                      multiline
+                      rows={3}
+                  placeholder="What are you working on?"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                      fullWidth
+                      variant="outlined"
+                      InputProps={{
+                        readOnly: todayLog && todayLog.status === 'ongoing'
+                      }}
+                    />
+
+                    <Stack direction="row" spacing={2} justifyContent="center">
+                  <Button
+                        variant="contained"
+                        color="primary"
+                        size="large"
+                    onClick={handleTimeIn}
+                        disabled={isLoading || todayLog?.status === 'ongoing' || logs.some(log => log.status === 'ongoing')}
+                        startIcon={<TimeIcon />}
+                        sx={{ minWidth: 150 }}
+                  >
+                    Time In
+                  </Button>
+                  <Button
+                        variant="contained"
+                        color="error"
+                        size="large"
+                    onClick={handleTimeOut}
+                        disabled={isLoading || !(todayLog?.status === 'ongoing' || logs.some(log => log.status === 'ongoing'))}
+                        startIcon={<CheckIcon />}
+                        sx={{ minWidth: 150 }}
+                  >
+                    Time Out
+                  </Button>
+                </Stack>
+              </Stack>
+                </CardContent>
+              </StyledCard>
+
+              {/* Time Log History Card */}
+              <StyledCard>
+                <CardContent>
+                  <Stack spacing={3}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="h5" component="h2">
+                        Time Log History
+                      </Typography>
+                      <HistoryIcon color="primary" fontSize="large" />
+                    </Box>
+                <Divider />
                 
-                <ButtonGroup variant="outline" size="sm" isAttached>
-                  <IconButton
-                    icon={<ChevronLeftIcon />}
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    isDisabled={currentPage === 1}
-                    aria-label="Previous page"
-                  />
-                  {[...Array(totalPages)].map((_, index) => (
-                    <Button
-                      key={index + 1}
-                      onClick={() => handlePageChange(index + 1)}
-                      colorScheme={currentPage === index + 1 ? "blue" : "gray"}
-                      variant={currentPage === index + 1 ? "solid" : "outline"}
+                    <Box display="flex" justifyContent="space-between" alignItems="center" gap={2}>
+                      <Box display="flex" alignItems="center" gap={2}>
+                        <Typography>Show</Typography>
+                        <FormControl sx={{ minWidth: 100 }}>
+                    <Select
+                      value={entriesPerPage}
+                      onChange={handleEntriesPerPageChange}
+                            size="small"
                     >
-                      {index + 1}
-                    </Button>
-                  ))}
-                  <IconButton
-                    icon={<ChevronRightIcon />}
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    isDisabled={currentPage === totalPages}
-                    aria-label="Next page"
-                  />
-                </ButtonGroup>
-              </HStack>
+                            <MenuItem value={5}>5</MenuItem>
+                            <MenuItem value={10}>10</MenuItem>
+                    </Select>
+                        </FormControl>
+                        <Typography>entries</Typography>
+                      </Box>
 
-              {/* No Results Message */}
-              {filteredLogs.length === 0 && (
-                <Text textAlign="center" color="gray.500" py={4}>
-                  No logs found matching your search
-                </Text>
-              )}
+                      <TextField
+                      placeholder="Search logs..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                        size="small"
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <SearchIcon />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    </Box>
+
+                    <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
+                      <Table stickyHeader>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Date</TableCell>
+                            <TableCell>Time In</TableCell>
+                            <TableCell>Time Out</TableCell>
+                            <TableCell>Duration</TableCell>
+                            <TableCell>Description</TableCell>
+                            <TableCell>Status</TableCell>
+                            <TableCell>Actions</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {currentEntries.map((log) => (
+                            <TableRow
+                              key={log._id}
+                              hover
+                              sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+                            >
+                              <TableCell>{new Date(log.date).toLocaleDateString()}</TableCell>
+                              <TableCell>{formatTimeOnly(log.timeIn)}</TableCell>
+                              <TableCell>{log.timeOut ? formatTimeOnly(log.timeOut) : '-'}</TableCell>
+                              <TableCell>{log.totalHours ? formatDuration(log.totalHours) : '-'}</TableCell>
+                              <TableCell>
+                                <Typography noWrap>{log.description || '-'}</Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={log.status}
+                                  color={log.status === 'ongoing' ? 'success' : 'primary'}
+                                  size="small"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Stack direction="row" spacing={1}>
+                                  <Tooltip title="Edit log">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => openEditModal(log)}
+                                      color="primary"
+                                    >
+                                      <EditIcon />
+                                    </IconButton>
+                              </Tooltip>
+                                  <Tooltip title="Delete log">
+                                    <span>
+                                <IconButton
+                                        size="small"
+                                  onClick={() => openDeleteDialog(log)}
+                                        color="error"
+                                        disabled={log.status === 'ongoing'}
+                                      >
+                                        <DeleteIcon />
+                                      </IconButton>
+                                    </span>
+                              </Tooltip>
+                                </Stack>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                  </Table>
+                    </TableContainer>
+
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2" color="text.secondary">
+                    Showing {indexOfFirstEntry + 1} to {Math.min(indexOfLastEntry, filteredLogs.length)} of {filteredLogs.length} entries
+                      </Typography>
+                  
+                      <Stack direction="row" spacing={1}>
+                    <IconButton
+                          onClick={() => handlePageChange(null, currentPage - 2)}
+                          disabled={currentPage === 1}
+                          size="small"
+                        >
+                          <ChevronLeftIcon />
+                        </IconButton>
+                    {[...Array(totalPages)].map((_, index) => (
+                      <Button
+                        key={index + 1}
+                            onClick={() => handlePageChange(null, index + 1)}
+                            variant={currentPage === index + 1 ? 'contained' : 'outlined'}
+                            size="small"
+                            sx={{ minWidth: 'auto' }}
+                      >
+                        {index + 1}
+                      </Button>
+                    ))}
+                    <IconButton
+                          onClick={() => handlePageChange(null, currentPage)}
+                          disabled={currentPage === totalPages}
+                          size="small"
+                        >
+                          <ChevronRightIcon />
+                        </IconButton>
+                      </Stack>
+                    </Box>
+
+                {filteredLogs.length === 0 && (
+                      <Typography color="text.secondary" align="center">
+                    No logs found matching your search
+                      </Typography>
+                )}
+              </Stack>
+                </CardContent>
+              </StyledCard>
             </Stack>
-          </CardBody>
-        </Card>
-      </VStack>
+          </Grid>
 
-      <Modal isOpen={isOpen} onClose={onClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Edit Description</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <Textarea
+        {/* Todo section */}
+          <Grid item xs={12} md={4}>
+            <Box position="sticky" top={16}>
+          <Todo />
+        </Box>
+          </Grid>
+        </Grid>
+
+        {/* Edit Description Dialog */}
+        <Dialog open={isOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>Edit Description</DialogTitle>
+          <DialogContent>
+            <TextField
+              multiline
+              rows={4}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Enter description"
-              size="sm"
-              resize="vertical"
-              rows={4}
+              fullWidth
+              variant="outlined"
+              sx={{ mt: 2 }}
             />
-          </ModalBody>
-          <ModalFooter>
-            <Button colorScheme="blue" mr={3} onClick={handleEditDescription} isLoading={isLoading}>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDialog}>Cancel</Button>
+            <Button
+              onClick={handleEditDescription}
+              variant="contained"
+              disabled={isLoading}
+            >
               Save
             </Button>
-            <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DialogActions>
+        </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog
-        isOpen={isDeleteDialogOpen}
-        leastDestructiveRef={cancelRef}
+        <Dialog
+          open={isDeleteDialogOpen}
         onClose={() => {
           setIsDeleteDialogOpen(false);
           setLogToDelete(null);
         }}
-      >
-        <AlertDialogOverlay>
-          <AlertDialogContent>
-            <AlertDialogHeader fontSize="lg" fontWeight="bold">
-              Delete Time Log
-            </AlertDialogHeader>
-
-            <AlertDialogBody>
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle>Delete Time Log</DialogTitle>
+          <DialogContent>
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              <AlertTitle>Warning</AlertTitle>
               Are you sure you want to delete this time log?
+            </Alert>
               {logToDelete && (
-                <Box mt={2}>
-                  <Text>
+              <Paper sx={{ p: 2 }}>
+                <Stack spacing={1}>
+                  <Typography>
                     <strong>Date:</strong> {new Date(logToDelete.date).toLocaleDateString()}
-                  </Text>
-                  <Text>
+                  </Typography>
+                  <Typography>
                     <strong>Time In:</strong> {formatTimeOnly(logToDelete.timeIn)}
-                  </Text>
+                  </Typography>
                   {logToDelete.timeOut && (
-                    <Text>
+                    <Typography>
                       <strong>Time Out:</strong> {formatTimeOnly(logToDelete.timeOut)}
-                    </Text>
+                    </Typography>
                   )}
-                </Box>
-              )}
-            </AlertDialogBody>
-
-            <AlertDialogFooter>
-              <Button ref={cancelRef} onClick={() => {
+                </Stack>
+              </Paper>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => {
                 setIsDeleteDialogOpen(false);
                 setLogToDelete(null);
-              }}>
+              }}
+            >
                 Cancel
               </Button>
-              <Button colorScheme="red" onClick={handleDelete} ml={3} isLoading={isLoading}>
+            <Button
+              onClick={handleDelete}
+              color="error"
+              variant="contained"
+              disabled={isLoading}
+            >
                 Delete
               </Button>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialogOverlay>
-      </AlertDialog>
+          </DialogActions>
+        </Dialog>
 
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={3000}
+          onClose={handleCloseSnackbar}
+          anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+        >
+          <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
     </Container>
+    <Box component="footer" sx={{ textAlign: 'center', py: 2, color: 'text.secondary', fontSize: 14 }}>
+      InternStart 2025. Created and designed by Nino Rey Garbo
+    </Box>
+  </div>
   );
 };
 

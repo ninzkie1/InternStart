@@ -118,9 +118,9 @@ export const timeOut = async (data) => {
   }
 };
 
-export const getTodayLog = async () => {
+export const getTodayLog = async (organizationId) => {
   try {
-    const response = await api.get('/intern-logs/today');
+    const response = await api.get(`/intern-logs/today?organizationId=${organizationId}`);
     return response.data;
   } catch (error) {
     console.error('Get today log error:', error);
@@ -128,9 +128,9 @@ export const getTodayLog = async () => {
   }
 };
 
-export const getLogs = async () => {
+export const getLogs = async (organizationId) => {
   try {
-    const response = await api.get('/intern-logs');
+    const response = await api.get(`/intern-logs?organizationId=${organizationId}`);
     return response.data;
   } catch (error) {
     console.error('Get logs error:', error);

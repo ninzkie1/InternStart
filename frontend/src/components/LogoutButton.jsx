@@ -1,43 +1,62 @@
 import {
   Button,
-  useToast
-} from '@chakra-ui/react';
+  Snackbar,
+  Alert
+} from '@mui/material';
 import { useAuth } from '../context/AuthContext';
+import { useState } from 'react';
 
 const LogoutButton = () => {
   const { logout } = useAuth();
-  const toast = useToast();
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
+
+  const handleCloseSnackbar = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
 
   const handleLogout = async () => {
     try {
       await logout();
-      toast({
-        title: 'Logged out successfully',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
+      setSnackbar({
+        open: true,
+        message: 'Logged out successfully',
+        severity: 'success'
       });
-      // Simple redirect without using React Router
       window.location.href = '/login';
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to logout',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
+      setSnackbar({
+        open: true,
+        message: 'Failed to logout',
+        severity: 'error'
       });
     }
   };
 
   return (
-    <Button
-      colorScheme="blue"
-      variant="outline"
-      onClick={handleLogout}
-    >
-      Logout
-    </Button>
+    <>
+      <Button
+        variant="outlined"
+        color="primary"
+        onClick={handleLogout}
+        sx={{ m: 1 }}
+      >
+        Logout
+      </Button>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </>
   );
 };
 

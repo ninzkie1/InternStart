@@ -1,29 +1,38 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Button,
-  FormControl,
-  FormLabel,
-  Input,
-  VStack,
-  Text,
-  useToast,
-  Heading,
   Container,
-} from '@chakra-ui/react';
-import { register } from '../services/api';
+  TextField,
+  Typography,
+  Card,
+  CardContent,
+  Alert,
+  IconButton,
+  InputAdornment,
+} from '@mui/material';
+import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const Register = () => {
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    role: 'intern' // Set default role to intern
+  });
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
-  const toast = useToast();
-  const { isAuthenticated } = useAuth();
+  const location = useLocation();
+  const { register, isAuthenticated } = useAuth();
+
+  // Get the redirect URL from query parameters
+  const searchParams = new URLSearchParams(location.search);
+  const redirectTo = searchParams.get('redirect') || '/dashboard';
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -31,140 +40,157 @@ const Register = () => {
     }
   }, [isAuthenticated, navigate]);
 
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+
+    // Validation
+    if (!formData.username || !formData.email || !formData.password || !formData.confirmPassword) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
     setIsLoading(true);
 
-    if (!username || !email || !password) {
-      toast({
-        title: 'Error',
-        description: 'Please fill in all fields',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-      setIsLoading(false);
-      return;
-    }
-
-    if (password.length < 6) {
-      toast({
-        title: 'Error',
-        description: 'Password must be at least 6 characters',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-      setIsLoading(false);
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      toast({
-        title: 'Error',
-        description: 'Passwords do not match',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      await register({ username, email, password });
-      toast({
-        title: 'Registration successful',
-        description: 'Please login with your credentials',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-      navigate('/login');
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: error.response?.data?.message || 'Something went wrong',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
+      const { confirmPassword, ...registrationData } = formData;
+      const result = await register(registrationData);
+      if (result.success) {
+        navigate(redirectTo);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to register');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <Container maxW="container.sm" py={10}>
-      <Box 
-        p={8} 
-        borderWidth={1} 
-        borderRadius={8} 
-        boxShadow="lg"
-        bg="white"
+    <Container component="main" maxWidth="xs">
+      <Box
+        sx={{
+          marginTop: 8,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}
       >
-        <VStack spacing={4} align="stretch">
-          <Heading textAlign="center" mb={6}>Register</Heading>
-          <form onSubmit={handleSubmit}>
-            <VStack spacing={4}>
-              <FormControl isRequired>
-                <FormLabel>Username</FormLabel>
-                <Input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your username"
-                />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel>Email</FormLabel>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel>Password</FormLabel>
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel>Confirm Password</FormLabel>
-                <Input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm your password"
-                />
-              </FormControl>
+        <Card sx={{ width: '100%', mt: 3 }}>
+          <CardContent>
+            <Typography component="h1" variant="h5" align="center" gutterBottom>
+              Register
+            </Typography>
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
+            <Box component="form" onSubmit={handleSubmit} noValidate>
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                id="username"
+                label="Username"
+                name="username"
+                autoComplete="username"
+                autoFocus
+                value={formData.username}
+                onChange={handleChange}
+                disabled={isLoading}
+              />
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                id="email"
+                label="Email Address"
+                name="email"
+                autoComplete="email"
+                type="email"
+                value={formData.email}
+                onChange={handleChange}
+                disabled={isLoading}
+              />
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                name="password"
+                label="Password"
+                type={showPassword ? 'text' : 'password'}
+                id="password"
+                autoComplete="new-password"
+                value={formData.password}
+                onChange={handleChange}
+                disabled={isLoading}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        aria-label="toggle password visibility"
+                        onClick={() => setShowPassword(!showPassword)}
+                        edge="end"
+                      >
+                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                name="confirmPassword"
+                label="Confirm Password"
+                type={showPassword ? 'text' : 'password'}
+                id="confirmPassword"
+                autoComplete="new-password"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                disabled={isLoading}
+              />
               <Button
                 type="submit"
-                colorScheme="blue"
-                width="full"
-                isLoading={isLoading}
-                loadingText="Registering..."
+                fullWidth
+                variant="contained"
+                sx={{ mt: 3, mb: 2 }}
+                disabled={isLoading}
               >
-                Register
+                {isLoading ? 'Registering...' : 'Register'}
               </Button>
-              <Text textAlign="center">
-                Already have an account?{' '}
-                <Button
-                  variant="link"
-                  colorScheme="blue"
-                  onClick={() => navigate('/login')}
+              <Box sx={{ textAlign: 'center' }}>
+                <Link 
+                  to={`/login${location.search}`}
+                  style={{ textDecoration: 'none' }}
                 >
-                  Login here
-                </Button>
-              </Text>
-            </VStack>
-          </form>
-        </VStack>
+                  <Typography color="primary">
+                    Already have an account? Login here
+                  </Typography>
+                </Link>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
       </Box>
     </Container>
   );
