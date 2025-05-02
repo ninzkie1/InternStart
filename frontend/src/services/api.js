@@ -160,14 +160,56 @@ export const updateLogDescription = async (logId, description) => {
   }
 };
 
-export const deleteLog = async (logId) => {
+export const updateLog = async (logId, logData) => {
   try {
-    const response = await api.delete(`/intern-logs/${logId}`);
-    return response.data;
+    const response = await fetch(`${API_BASE_URL}/api/logs/${logId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      },
+      body: JSON.stringify(logData)
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update log');
+    }
+
+    return await response.json();
   } catch (error) {
-    console.error('Delete log error:', error);
+    console.error('Error updating log:', error);
     throw error;
   }
 };
 
-export default api; 
+export const deleteLog = async (logId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/logs/${logId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to delete log');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error deleting log:', error);
+    throw error;
+  }
+};
+
+export const getMemberLogs = async () => {
+  try {
+    const response = await api.get('/organizations/member-logs');
+    return response;
+  } catch (error) {
+    console.error('Get member logs error:', error);
+    throw error;
+  }
+};
+
+export default api;

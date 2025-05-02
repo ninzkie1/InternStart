@@ -574,7 +574,6 @@ const Dashboard = () => {
                               <TableCell>
                                 <Chip label={log.status} color={log.status === 'ongoing' ? 'success' : 'primary'} size="small" />
                               </TableCell>
-                             
                               <TableCell>
                                 <Stack direction="row" spacing={1}>
                                   <Tooltip title="Edit log">

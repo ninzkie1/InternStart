@@ -1,3 +1,4 @@
+console.log('Backend server started and logging is working!');
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
@@ -15,6 +16,81 @@ const isLeader = (req, res, next) => {
   }
   next();
 };
+
+// Get all intern logs for organization members (MUST be before parameterized routes)
+router.get('/member-logs', protect, isLeader, async (req, res) => {
+  process.stdout.write('\n\n==================================\n');
+  process.stdout.write('MEMBER LOGS ROUTE ACCESSED\n');
+  process.stdout.write('==================================\n');
+  
+  try {
+    // Force immediate console output
+    process.stdout.write(`Checking user authentication...\n`);
+    
+    if (!req.user || !req.user._id) {
+      process.stdout.write('ERROR: No authenticated user found\n');
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    process.stdout.write(`User authenticated:\n`);
+    process.stdout.write(`- ID: ${req.user._id}\n`);
+    process.stdout.write(`- Role: ${req.user.role}\n`);
+
+    // Find the leader's organization
+    process.stdout.write(`Looking for organization with leader ID: ${req.user._id}\n`);
+    const organization = await Organization.findOne({ leader: req.user._id });
+    
+    if (!organization) {
+      process.stdout.write(`ERROR: No organization found for leader ID: ${req.user._id}\n`);
+      return res.status(404).json({ 
+        message: 'Organization not found',
+        userId: req.user._id
+      });
+    }
+
+    process.stdout.write(`Organization found:\n`);
+    process.stdout.write(`- ID: ${organization._id}\n`);
+    process.stdout.write(`- Name: ${organization.name}\n`);
+    process.stdout.write(`- Member count: ${organization.members ? organization.members.length : 0}\n`);
+
+    // Ensure members array exists
+    const memberIds = organization.members || [];
+    process.stdout.write(`Member IDs: ${JSON.stringify(memberIds)}\n`);
+
+    // Get all logs for members
+    const query = {
+      user: { $in: memberIds },
+      $or: [
+        { organization: organization._id },
+        { organization: null }
+      ]
+    };
+    
+    process.stdout.write(`Querying logs with:\n${JSON.stringify(query, null, 2)}\n`);
+
+    const logs = await InternLog.find(query)
+      .populate('user', 'username email')
+      .sort({ date: -1, timeIn: -1 });
+
+    process.stdout.write(`Found ${logs ? logs.length : 0} logs\n`);
+    process.stdout.write('==================================\n');
+
+    res.json(logs || []);
+  } catch (error) {
+    process.stdout.write('\nERROR IN MEMBER LOGS ROUTE:\n');
+    process.stdout.write('----------------------------------\n');
+    process.stdout.write(`Error name: ${error.name}\n`);
+    process.stdout.write(`Error message: ${error.message}\n`);
+    process.stdout.write(`Stack trace:\n${error.stack}\n`);
+    process.stdout.write('----------------------------------\n');
+    
+    res.status(500).json({ 
+      message: 'Failed to fetch member logs',
+      error: error.message,
+      type: error.name
+    });
+  }
+});
 
 // Get leader's organization
 router.get('/my-org', protect, async (req, res) => {
@@ -439,7 +515,6 @@ router.post('/generate-invite', protect, isLeader, async (req, res) => {
   }
 });
 
-// Join organization by invite code
 router.post('/org/:inviteCode/join', protect, async (req, res) => {
   try {
     console.log('Attempting to join with invite code:', req.params.inviteCode);

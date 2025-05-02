@@ -14,6 +14,8 @@ import {
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { GoogleLogin } from '@react-oauth/google';
+import Divider from '@mui/material/Divider';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -149,6 +151,30 @@ const Login = () => {
                 </Link>
               </Box>
             </Box>
+            <Divider sx={{ my: 2 }}>or</Divider>
+            <GoogleLogin
+              onSuccess={async credentialResponse => {
+                try {
+                  const res = await fetch('http://localhost:5001/api/auth/google', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ credential: credentialResponse.credential }),
+                  });
+                  const data = await res.json();
+                  if (data.token) {
+                    localStorage.setItem('token', data.token);
+                    window.location.href = '/dashboard';
+                  } else {
+                    setError(data.message || 'Google login failed');
+                  }
+                } catch (err) {
+                  setError('Google login failed');
+                }
+              }}
+              onError={() => {
+                setError('Google login failed');
+              }}
+            />
           </CardContent>
         </Card>
       </Box>

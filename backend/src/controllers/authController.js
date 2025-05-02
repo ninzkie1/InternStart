@@ -31,7 +31,7 @@ const registerUser = async (req, res) => {
 
     // Generate token
     const token = jwt.sign(
-      { userId: user._id },
+      { id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: '30d' }
     );
@@ -88,7 +88,7 @@ const loginUser = async (req, res) => {
 
     // Generate token
     const token = jwt.sign(
-      { userId: user._id },
+      { id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: '30d' }
     );
@@ -174,7 +174,7 @@ const handleGoogleAuth = async (req, res) => {
 
     // Generate token
     const token = jwt.sign(
-      { userId: user._id },
+      { id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: '30d' }
     );
@@ -288,7 +288,7 @@ const resetPassword = async (req, res) => {
 
     // Generate new login token
     const loginToken = jwt.sign(
-      { userId: user._id },
+      { id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );

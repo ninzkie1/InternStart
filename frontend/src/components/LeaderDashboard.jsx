@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -25,6 +25,14 @@ import {
   DialogContentText,
   Drawer,
   ListItemIcon,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Chip,
+  CircularProgress
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -41,6 +49,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../config/axios';
 import LogoutButton from './LogoutButton';
 import { Link, useLocation } from 'react-router-dom';
+
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import ChatIcon from '@mui/icons-material/Chat';
@@ -56,6 +65,7 @@ const navItems = [
 
 const LeaderDashboard = () => {
   const [organization, setOrganization] = useState(null);
+
   const [openOrgDialog, setOpenOrgDialog] = useState(false);
   const [openInviteDialog, setOpenInviteDialog] = useState(false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
@@ -353,8 +363,12 @@ const LeaderDashboard = () => {
           <Typography variant="h5" color="primary">
             Hello, {user?.username || 'User'}
           </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ width: 250 }}>
+              <LogoutButton />
+            </Box>
+          </Box>
         </Box>
-        {/* Dashboard content: organization, members, join requests, etc. */}
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
@@ -415,7 +429,7 @@ const LeaderDashboard = () => {
                     <Typography variant="subtitle2" gutterBottom>
                       Organization Link
                     </Typography>
-                    <Box display="flex" alignItems="center" gap={1}>
+                    <Box display="flex" alignItems="center" gap={2}>
                       {organization.inviteCode ? (
                         <>
                           <Typography

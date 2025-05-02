@@ -2,163 +2,223 @@ import React, { useEffect, useState } from 'react';
 import {
   Box,
   Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Paper,
-  IconButton,
   TextField,
   InputAdornment,
+  CircularProgress,
+  Alert,
+  FormControl,
+  InputLabel,
   Select,
   MenuItem,
-  FormControl,
-  Snackbar,
-  Button,
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Search as SearchIcon } from '@mui/icons-material';
+import { DataGrid, GridToolbar } from '@mui/x-data-grid';
+import { Search as SearchIcon } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
-import api from '../config/axios';
+import { getMemberLogs } from '../services/api';
+import LeaderSidebarLayout from './LeaderSidebarLayout';
 
 const LeaderAnalysis = () => {
   const { user } = useAuth();
   const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredLogs, setFilteredLogs] = useState([]);
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-
-  useEffect(() => {
-    fetchLogs();
-    // eslint-disable-next-line
-  }, []);
+  const [filterField, setFilterField] = useState('username');
 
   const fetchLogs = async () => {
     try {
-      const token = localStorage.getItem('token');
-      // Fetch all logs for the leader's organization
-      const response = await api.get('/organizations/logs', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setLogs(response.data || []);
+      setLoading(true);
+      setError(null);
+      const response = await getMemberLogs();
+      const logsWithIds = response.data.map((log, index) => ({
+        id: log._id || index,
+        username: log.user?.username || 'N/A',
+        email: log.user?.email || 'N/A',
+        date: log.date || null,
+        timeIn: log.timeIn || null,
+        timeOut: log.timeOut || null,
+        totalHours: log.totalHours,
+        status: log.status || 'N/A',
+        description: log.description || 'N/A',
+      }));
+      setLogs(logsWithIds);
     } catch (error) {
-      setSnackbar({ open: true, message: 'Failed to fetch logs', severity: 'error' });
+      console.error('Error fetching logs:', error);
+      setError('Failed to fetch member logs. Please try again later.');
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    // Filter logs based on search query
-    const filtered = logs.filter(log => {
-      const searchLower = searchQuery.toLowerCase();
-      return (
-        (log.internName && log.internName.toLowerCase().includes(searchLower)) ||
-        (log.description && log.description.toLowerCase().includes(searchLower)) ||
-        (log.date && new Date(log.date).toLocaleDateString().toLowerCase().includes(searchLower))
-      );
-    });
-    setFilteredLogs(filtered);
-    setCurrentPage(1);
-  }, [logs, searchQuery]);
+    fetchLogs();
+  }, []);
 
-  // Pagination
-  const indexOfLastEntry = currentPage * entriesPerPage;
-  const indexOfFirstEntry = indexOfLastEntry - entriesPerPage;
-  const currentEntries = filteredLogs.slice(indexOfFirstEntry, indexOfLastEntry);
-  const totalPages = Math.ceil(filteredLogs.length / entriesPerPage);
+  const columns = [
+    { field: 'username', headerName: 'Username', flex: 1, minWidth: 130 },
+    { field: 'email', headerName: 'Email', flex: 1.5, minWidth: 200 },
+    { field: 'description', headerName: 'Description', flex: 2, minWidth: 200 },
+    {
+      field: 'date',
+      headerName: 'Date',
+      flex: 1,
+      minWidth: 200,
+      renderCell: (params) => {
+        if (!params.value) return 'N/A';
+        const d = new Date(params.value);
+        return isNaN(d) ? 'N/A' : d.toLocaleDateString();
+      }
+    },
+    {
+      field: 'timeIn',
+      headerName: 'Time In',
+      flex: 1,
+      minWidth: 200,
+      renderCell: (params) => {
+        if (!params.value) return 'N/A';
+        const d = new Date(params.value);
+        return isNaN(d) ? 'N/A' : d.toLocaleTimeString();
+      }
+    },
+    {
+      field: 'timeOut',
+      headerName: 'Time Out',
+      flex: 1,
+      minWidth: 200,
+      renderCell: (params) => {
+        if (!params.value) return 'N/A';
+        const d = new Date(params.value);
+        return isNaN(d) ? 'N/A' : d.toLocaleTimeString();
+      }
+    },
+    {
+      field: 'totalHours',
+      headerName: 'Total Duration',
+      flex: 1,
+      minWidth: 110,
+      renderCell: (params) => {
+        const value = params.row;
+        if (!value?.timeIn || !value?.timeOut) return 'N/A';
+        const timeIn = new Date(value.timeIn);
+        const timeOut = new Date(value.timeOut);
+        if (isNaN(timeIn) || isNaN(timeOut)) return 'N/A';
+        const diffMs = timeOut - timeIn;
+        if (diffMs < 0) return 'N/A';
+        const diffSec = Math.floor(diffMs / 1000);
+        if (diffSec < 60) return `${diffSec}s`;
+        const diffMin = Math.floor(diffSec / 60);
+        if (diffMin < 60) return `${diffMin}m ${diffSec % 60}s`;
+        const diffHr = Math.floor(diffMin / 60);
+        return `${diffHr}h ${diffMin % 60}m`;
+      }
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      flex: 1,
+      minWidth: 100,
+      renderCell: (params) => (
+        <Box
+          sx={{
+            backgroundColor: params.value === 'active' ? '#E8F5E9' : '#FFEBEE',
+            color: params.value === 'active' ? '#2E7D32' : '#C62828',
+            padding: '6px 16px',
+            borderRadius: '16px',
+            fontSize: '0.875rem',
+          }}
+        >
+          {params.value}
+        </Box>
+      ),
+    },
+    
+  ];
 
-  const handlePageChange = (event, newPage) => {
-    setCurrentPage(newPage + 1);
-  };
+  const filteredLogs = logs.filter((log) => {
+    if (!searchQuery) return true;
+    const searchValue = searchQuery.toLowerCase();
+    const fieldValue = String(log[filterField] || '').toLowerCase();
+    return fieldValue.includes(searchValue);
+  });
 
-  const handleEntriesPerPageChange = (event) => {
-    setEntriesPerPage(parseInt(event.target.value, 10));
-    setCurrentPage(1);
-  };
-
-  // Stub handlers for edit/delete
-  const handleEdit = (log) => {
-    setSnackbar({ open: true, message: 'Edit not implemented', severity: 'info' });
-  };
-  const handleDelete = (log) => {
-    setSnackbar({ open: true, message: 'Delete not implemented', severity: 'info' });
-  };
+  if (error) {
+    return (
+      <Alert severity="error" sx={{ mt: 2 }}>
+        {error}
+      </Alert>
+    );
+  }
 
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>Analysis - Intern Logs</Typography>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <FormControl sx={{ minWidth: 100 }}>
-          <Select value={entriesPerPage} onChange={handleEntriesPerPageChange} size="small">
-            <MenuItem value={5}>5</MenuItem>
-            <MenuItem value={10}>10</MenuItem>
-            <MenuItem value={25}>25</MenuItem>
-          </Select>
-        </FormControl>
-        <TextField
-          placeholder="Search..."
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          size="small"
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-          }}
-        />
+    <LeaderSidebarLayout>
+      <Box sx={{ height: '100%', width: '100%', p: 3 }}>
+        <Typography variant="h4" gutterBottom>
+          Member Activity Logs
+        </Typography>
+
+        <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+          <FormControl sx={{ minWidth: 120 }}>
+            <InputLabel>Filter By</InputLabel>
+            <Select
+              value={filterField}
+              label="Filter By"
+              onChange={(e) => setFilterField(e.target.value)}
+            >
+              <MenuItem value="username">Username</MenuItem>
+              <MenuItem value="email">Email</MenuItem>
+              <MenuItem value="status">Status</MenuItem>
+            </Select>
+          </FormControl>
+
+          <TextField
+            fullWidth
+            variant="outlined"
+            placeholder={`Search by ${filterField}...`}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+          />
+        </Box>
+
+        <Paper sx={{ height: 600, width: '100%' }}>
+          <DataGrid
+            rows={filteredLogs}
+            columns={columns}
+            pageSize={10}
+            rowsPerPageOptions={[5, 10, 20, 50]}
+            checkboxSelection
+            disableSelectionOnClick
+            loading={loading}
+            components={{
+              Toolbar: GridToolbar,
+              LoadingOverlay: CircularProgress,
+            }}
+            sx={{
+              '& .MuiDataGrid-cell': {
+                fontSize: '0.875rem',
+              },
+              '& .MuiDataGrid-columnHeader': {
+                backgroundColor: '#f5f5f5',
+                fontWeight: 'bold',
+              },
+            }}
+            initialState={{
+              sorting: {
+                sortModel: [{ field: 'date', sort: 'desc' }],
+              },
+            }}
+          />
+        </Paper>
       </Box>
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Intern Name</TableCell>
-              <TableCell>Description</TableCell>
-              <TableCell>Date</TableCell>
-              <TableCell>Time In</TableCell>
-              <TableCell>Time Out</TableCell>
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {currentEntries.map((log, idx) => (
-              <TableRow key={log._id || idx}>
-                <TableCell>{log.internName || log.user?.username || '-'}</TableCell>
-                <TableCell>{log.description || '-'}</TableCell>
-                <TableCell>{log.date ? new Date(log.date).toLocaleDateString() : '-'}</TableCell>
-                <TableCell>{log.timeIn ? new Date(log.timeIn).toLocaleTimeString() : '-'}</TableCell>
-                <TableCell>{log.timeOut ? new Date(log.timeOut).toLocaleTimeString() : '-'}</TableCell>
-                <TableCell>
-                  <IconButton onClick={() => handleEdit(log)}><EditIcon /></IconButton>
-                  <IconButton onClick={() => handleDelete(log)} color="error"><DeleteIcon /></IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-            {currentEntries.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} align="center">No logs found</TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      {/* Pagination controls (optional) */}
-      <Box display="flex" justifyContent="center" alignItems="center" mt={2} gap={1}>
-        <Button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</Button>
-        <Typography>{currentPage} / {totalPages || 1}</Typography>
-        <Button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</Button>
-      </Box>
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={3000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
-        message={snackbar.message}
-      />
-    </Box>
+    </LeaderSidebarLayout>
   );
 };
 
-export default LeaderAnalysis; 
+export default LeaderAnalysis;
