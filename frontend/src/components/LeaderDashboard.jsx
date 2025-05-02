@@ -185,7 +185,9 @@ const LeaderDashboard = () => {
     try {
       setError('');
       const token = localStorage.getItem('token');
-      const response = await api.post(`/organizations/${organization._id}/invite`, {
+      
+      // Send email invitation via new endpoint
+      const response = await api.post(`/organizations/${organization._id}/invite-email`, {
         email: inviteEmail
       }, {
         headers: { Authorization: `Bearer ${token}` }
@@ -193,14 +195,15 @@ const LeaderDashboard = () => {
       
       // Copy invite link to clipboard
       navigator.clipboard.writeText(response.data.inviteLink);
-      setSnackbarMessage('Invite link copied to clipboard!');
+      
+      setSnackbarMessage('Invitation email sent successfully!');
       setSnackbarOpen(true);
       
       setOpenInviteDialog(false);
       setInviteEmail('');
     } catch (error) {
       console.error('Error inviting member:', error);
-      setError('Failed to send invitation');
+      setError('Failed to send invitation email');
     }
   };
 

@@ -2,8 +2,10 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../config/axios';
 
-const AuthContext = createContext(null);
+// Create a context with a more descriptive name for better debugging
+export const AuthContext = createContext(null);
 
+// Hook for using the auth context
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -12,6 +14,7 @@ export const useAuth = () => {
   return context;
 };
 
+// Provider component that wraps the app
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,6 +23,8 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('token');
+      // Don't automatically navigate during initial auth check
+      // Only authenticate the user if possible
       if (token) {
         try {
           const response = await api.get('/auth/profile', {
@@ -30,14 +35,15 @@ export const AuthProvider = ({ children }) => {
           console.error('Auth check failed:', error);
           localStorage.removeItem('token');
           setUser(null);
-          navigate('/login');
+          // Don't navigate away automatically if auth check fails
+          // This allows the Register component to handle its own redirection
         }
       }
       setLoading(false);
     };
 
     checkAuth();
-  }, [navigate]);
+  }, []);
 
   const login = async (username, password) => {
     try {
@@ -73,18 +79,39 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (userData) => {
+  const register = async (userData, redirectPath = null) => {
     try {
       const response = await api.post('/auth/register', userData);
-      const user = response.data;
-      setUser(user);
-      // Redirect based on role
-      if (user.role === 'leader') {
-        navigate('/leader-dashboard');
-      } else {
-        navigate('/dashboard');
+      
+      // Save the token and user data
+      const { token } = response.data;
+      if (!token) {
+        console.error('No token received from registration');
       }
-      return { success: true };
+      
+      // Store token and update user state immediately
+      localStorage.setItem('token', token);
+      setUser(response.data);
+      
+      console.log('Registration successful, redirect path:', redirectPath);
+      
+      // Small delay to ensure the token is saved before redirect
+      setTimeout(() => {
+        // Use the provided redirect path if available
+        if (redirectPath && redirectPath.includes('/join')) {
+          console.log('Redirecting to join organization:', redirectPath);
+          navigate(redirectPath);
+        } else {
+          // Default redirect based on role
+          if (response.data.role === 'leader') {
+            navigate('/leader-dashboard');
+          } else {
+            navigate('/dashboard');
+          }
+        }
+      }, 100);
+      
+      return { success: true, token };
     } catch (error) {
       console.error('Registration failed:', error);
       return {
@@ -116,4 +143,5 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-export default AuthContext; 
+// Note: We're using named exports only, no default export
+// This provides better compatibility with React Fast Refresh 

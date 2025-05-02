@@ -119,6 +119,16 @@ const Login = () => {
                   ),
                 }}
               />
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+                <Link 
+                  to="/forgot-password"
+                  style={{ textDecoration: 'none' }}
+                >
+                  <Typography variant="body2" color="primary">
+                    Forgot Password?
+                  </Typography>
+                </Link>
+              </Box>
               <Button
                 type="submit"
                 fullWidth

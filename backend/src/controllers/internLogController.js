@@ -5,35 +5,67 @@ const InternLog = require('../models/InternLog');
 // @access  Private
 const timeIn = async (req, res) => {
   try {
-    // Check if there's an ongoing session in the same organization
-    const ongoingLog = await InternLog.findOne({
-      user: req.user._id,
-      organization: req.body.organizationId,
-      status: 'ongoing'
+    console.log('Time in request:', {
+      userId: req.user._id,
+      organizationId: req.body.organizationId || 'none'
     });
+    
+    // Create a query filter for ongoing session check
+    let filter = {
+      user: req.user._id,
+      status: 'ongoing'
+    };
+    
+    // Only filter by organization if one is provided
+    if (req.body.organizationId) {
+      filter.organization = req.body.organizationId;
+    } else {
+      // If no organization provided, check for any ongoing session without organization
+      filter.organization = null;
+    }
+    
+    console.log('Finding ongoing sessions with filter:', filter);
+    
+    // Check if there's an ongoing session
+    const ongoingLog = await InternLog.findOne(filter);
 
     if (ongoingLog) {
       return res.status(400).json({
         success: false,
-        message: 'You already have an ongoing session in this organization'
+        message: req.body.organizationId 
+          ? 'You already have an ongoing session in this organization'
+          : 'You already have an ongoing session without an organization'
       });
     }
 
-    // Create new log
-    const log = await InternLog.create({
+    // Create log data
+    const logData = {
       user: req.user._id,
-      organization: req.body.organizationId,
       timeIn: new Date(),
       date: new Date().setHours(0, 0, 0, 0),
       description: req.body.description || ''
-    });
+    };
+    
+    // Only add organization field if one is provided
+    if (req.body.organizationId) {
+      logData.organization = req.body.organizationId;
+    } else {
+      // Explicitly set to null when no organization is selected
+      logData.organization = null;
+    }
+    
+    console.log('Creating log with data:', logData);
+    
+    // Create new log
+    const log = await InternLog.create(logData);
+    console.log('Log created:', log._id);
 
     res.status(201).json({
       success: true,
       data: log
     });
   } catch (error) {
-    console.error(error);
+    console.error('Error in timeIn:', error);
     res.status(500).json({
       success: false,
       message: 'Server error',
@@ -47,17 +79,38 @@ const timeIn = async (req, res) => {
 // @access  Private
 const timeOut = async (req, res) => {
   try {
-    // Find ongoing session
-    const log = await InternLog.findOne({
-      user: req.user._id,
-      organization: req.body.organizationId,
-      status: 'ongoing'
+    console.log('Time out request:', {
+      userId: req.user._id,
+      organizationId: req.body.organizationId || 'none'
     });
+    
+    // Create a query filter for ongoing session
+    let filter = {
+      user: req.user._id,
+      status: 'ongoing'
+    };
+    
+    // Only filter by organization if one is provided
+    if (req.body.organizationId) {
+      filter.organization = req.body.organizationId;
+    } else {
+      // If no organization provided, look for logs with null organization
+      filter.organization = null;
+    }
+    
+    console.log('Finding ongoing session with filter:', filter);
+    
+    // Find ongoing session
+    const log = await InternLog.findOne(filter);
+    
+    console.log('Log found:', log ? 'Yes' : 'No');
 
     if (!log) {
       return res.status(400).json({
         success: false,
-        message: 'No ongoing session found'
+        message: req.body.organizationId 
+          ? 'No ongoing session found in this organization' 
+          : 'No ongoing session found without an organization'
       });
     }
 
@@ -81,7 +134,7 @@ const timeOut = async (req, res) => {
       data: log
     });
   } catch (error) {
-    console.error(error);
+    console.error('Error in timeOut:', error);
     res.status(500).json({
       success: false,
       message: 'Server error',
@@ -129,21 +182,39 @@ const updateDescription = async (req, res) => {
 // @access  Private
 const getTodayLog = async (req, res) => {
   try {
+    console.log('Get today log request:', {
+      userId: req.user._id,
+      organizationId: req.query.organizationId || 'none'
+    });
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const log = await InternLog.findOne({
+    // Create query object
+    let query = {
       user: req.user._id,
-      organization: req.query.organizationId,
       date: today
-    });
+    };
+
+    // Only add organization to query if it's a valid value
+    if (req.query.organizationId && req.query.organizationId !== 'undefined' && req.query.organizationId !== 'null') {
+      query.organization = req.query.organizationId;
+    } else {
+      // If no organization is specified, look for logs with null organization
+      query.organization = null;
+    }
+    
+    console.log('Finding today log with query:', query);
+
+    const log = await InternLog.findOne(query);
+    console.log('Today log found:', log ? 'Yes' : 'No');
 
     res.json({
       success: true,
       data: log
     });
   } catch (error) {
-    console.error(error);
+    console.error('Error in getTodayLog:', error);
     res.status(500).json({
       success: false,
       message: 'Server error',
@@ -157,17 +228,68 @@ const getTodayLog = async (req, res) => {
 // @access  Private
 const getLogs = async (req, res) => {
   try {
-    const logs = await InternLog.find({
-      user: req.user._id,
-      organization: req.query.organizationId
-    }).sort({ date: -1 });
+    console.log('Get logs request:', {
+      userId: req.user._id,
+      organizationId: req.query.organizationId || 'none'
+    });
+    
+    // Create query object
+    let query = {
+      user: req.user._id
+    };
+
+    // Only add organization to query if it's a valid value
+    if (req.query.organizationId && req.query.organizationId !== 'undefined' && req.query.organizationId !== 'null') {
+      query.organization = req.query.organizationId;
+    } else {
+      // If no organization is specified, look for logs with null organization
+      query.organization = null;
+    }
+    
+    console.log('Finding logs with query:', query);
+
+    const logs = await InternLog.find(query).sort({ date: -1 });
+    console.log('Found logs count:', logs.length);
 
     res.json({
       success: true,
       data: logs
     });
   } catch (error) {
-    console.error(error);
+    console.error('Error in getLogs:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Delete a log
+// @route   DELETE /api/intern-logs/:id
+// @access  Private
+const deleteLog = async (req, res) => {
+  try {
+    const log = await InternLog.findOne({
+      _id: req.params.id,
+      user: req.user._id
+    });
+
+    if (!log) {
+      return res.status(404).json({
+        success: false,
+        message: 'Log not found'
+      });
+    }
+
+    await log.deleteOne();
+
+    res.json({
+      success: true,
+      message: 'Log deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting log:', error);
     res.status(500).json({
       success: false,
       message: 'Server error',
@@ -181,5 +303,6 @@ module.exports = {
   timeOut,
   getTodayLog,
   getLogs,
-  updateDescription
-}; 
+  updateDescription,
+  deleteLog
+};

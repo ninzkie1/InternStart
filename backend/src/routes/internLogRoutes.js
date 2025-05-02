@@ -5,7 +5,8 @@ const {
   timeOut,
   getTodayLog,
   getLogs,
-  updateDescription
+  updateDescription,
+  deleteLog
 } = require('../controllers/internLogController');
 const { protect } = require('../middleware/auth');
 
@@ -17,5 +18,6 @@ router.post('/time-out', timeOut);
 router.get('/today', getTodayLog);
 router.get('/', getLogs);
 router.patch('/:id/description', updateDescription);
+router.delete('/:id', deleteLog);
 
 module.exports = router; 

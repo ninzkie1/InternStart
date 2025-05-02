@@ -33,12 +33,11 @@ const OrganizationSwitcher = ({ selectedOrganization, onOrganizationChange }) =>
         console.log('Organizations response:', response.data);
         
         setOrganizations(response.data);
-        
-        // If no organization is selected and we have organizations, select the first one
-        if (!selectedOrganization && response.data.length > 0) {
-          console.log('Auto-selecting first organization:', response.data[0]);
-          onOrganizationChange(response.data[0]);
-        }
+        // Remove auto-select logic to allow 'No Organization' selection to persist
+        // if (!selectedOrganization && response.data.length > 0) {
+        //   console.log('Auto-selecting first organization:', response.data[0]);
+        //   onOrganizationChange(response.data[0]);
+        // }
       } catch (error) {
         console.error('Error fetching organizations:', error);
         console.error('Error details:', {
@@ -77,11 +76,23 @@ const OrganizationSwitcher = ({ selectedOrganization, onOrganizationChange }) =>
     );
   }
 
+  // Even with no organizations, we'll show the switcher with a "No Organization" option
+  // This allows the user to track time without being in an organization
+  const noOrganizationOption = { _id: 'no-org', name: 'No Organization' };
+  
+  // If there are no organizations, we'll still show the switcher with just the "No Organization" option
   if (organizations.length === 0) {
     return (
-      <Alert severity="info" sx={{ mb: 2 }}>
-        You are not a member of any organization. Please join an organization to start tracking time.
-      </Alert>
+      <FormControl fullWidth variant="outlined" size="small">
+        <InputLabel>Organization</InputLabel>
+        <Select
+          value={'no-org'}
+          onChange={() => onOrganizationChange(null)}
+          label="Organization"
+        >
+          <MenuItem value={'no-org'}>{noOrganizationOption.name}</MenuItem>
+        </Select>
+      </FormControl>
     );
   }
 
@@ -89,14 +100,30 @@ const OrganizationSwitcher = ({ selectedOrganization, onOrganizationChange }) =>
     <FormControl fullWidth variant="outlined" size="small">
       <InputLabel>Organization</InputLabel>
       <Select
-        value={selectedOrganization?._id || ''}
+        value={selectedOrganization && selectedOrganization._id ? selectedOrganization._id : 'no-org'}
         onChange={(e) => {
-          const selected = organizations.find(org => org._id === e.target.value);
-          console.log('Selected organization:', selected);
-          onOrganizationChange(selected);
+          if (e.target.value === 'no-org') {
+            // Handle 'No Organization' selection
+            console.log('Selected: No Organization');
+            onOrganizationChange(null);
+          } else {
+            // Handle regular organization selection
+            const selected = organizations.find(org => org._id === e.target.value);
+            console.log('Selected organization:', selected);
+            onOrganizationChange(selected);
+          }
         }}
         label="Organization"
       >
+        {/* Add 'No Organization' option at the top */}
+        <MenuItem key="no-org" value="no-org">
+          No Organization
+        </MenuItem>
+        {/* Add divider if there are organizations */}
+        {organizations.length > 0 && (
+          <MenuItem disabled sx={{ borderTop: '1px solid #eee', margin: '4px 0', padding: 0 }} />
+        )}
+        {/* List all organizations */}
         {organizations.map((org) => (
           <MenuItem key={org._id} value={org._id}>
             {org.name}

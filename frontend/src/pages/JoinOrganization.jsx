@@ -56,6 +56,7 @@ const JoinOrganization = () => {
       }
 
       console.log('Joining organization with invite code:', actualInviteCode);
+      // Fix the endpoint URL to match the backend route structure
       const response = await axios.post(
         `${API_URL}/organizations/org/${actualInviteCode}/join`,
         {},

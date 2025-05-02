@@ -120,7 +120,13 @@ export const timeOut = async (data) => {
 
 export const getTodayLog = async (organizationId) => {
   try {
-    const response = await api.get(`/intern-logs/today?organizationId=${organizationId}`);
+    // Only include organizationId in URL if it exists and is valid
+    let url = '/intern-logs/today';
+    if (organizationId) {
+      url += `?organizationId=${organizationId}`;
+    }
+    
+    const response = await api.get(url);
     return response.data;
   } catch (error) {
     console.error('Get today log error:', error);
@@ -130,7 +136,13 @@ export const getTodayLog = async (organizationId) => {
 
 export const getLogs = async (organizationId) => {
   try {
-    const response = await api.get(`/intern-logs?organizationId=${organizationId}`);
+    // Only include organizationId in URL if it exists and is valid
+    let url = '/intern-logs';
+    if (organizationId) {
+      url += `?organizationId=${organizationId}`;
+    }
+    
+    const response = await api.get(url);
     return response.data;
   } catch (error) {
     console.error('Get logs error:', error);
@@ -145,6 +157,16 @@ export const updateLogDescription = async (logId, description) => {
   } catch (error) {
     console.error('Update log description error:', error);
     throw error.response?.data || error;
+  }
+};
+
+export const deleteLog = async (logId) => {
+  try {
+    const response = await api.delete(`/intern-logs/${logId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Delete log error:', error);
+    throw error;
   }
 };
 

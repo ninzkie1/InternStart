@@ -34,11 +34,8 @@ const Register = () => {
   const searchParams = new URLSearchParams(location.search);
   const redirectTo = searchParams.get('redirect') || '/dashboard';
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/dashboard');
-    }
-  }, [isAuthenticated, navigate]);
+  // Removed automatic redirect to dashboard when authenticated
+  // This allows the redirection after registration to work properly
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -72,10 +69,10 @@ const Register = () => {
 
     try {
       const { confirmPassword, ...registrationData } = formData;
-      const result = await register(registrationData);
-      if (result.success) {
-        navigate(redirectTo);
-      }
+      // Pass the redirect path to the register function
+      const result = await register(registrationData, redirectTo);
+      // The redirect is now handled in the register function
+      // No need to navigate here
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to register');
     } finally {

@@ -49,7 +49,7 @@ import {
   History as HistoryIcon,
   Today as TodayIcon,
 } from '@mui/icons-material';
-import { timeIn, timeOut, getTodayLog, getLogs, updateLogDescription } from '../services/api';
+import { timeIn, timeOut, getTodayLog, getLogs, updateLogDescription, deleteLog } from '../services/api';
 import axios from 'axios';
 import Todo from '../components/Todo';
 import { styled } from '@mui/material/styles';
@@ -110,10 +110,9 @@ const Dashboard = () => {
   };
 
   const fetchTodayLog = useCallback(async () => {
-    if (!selectedOrganization) return;
-
     try {
-      const response = await getTodayLog(selectedOrganization._id);
+      const orgId = selectedOrganization ? selectedOrganization._id : undefined;
+      const response = await getTodayLog(orgId);
       
       // If no log found for today but there's an ongoing session in the logs,
       // use that as today's log
@@ -139,10 +138,9 @@ const Dashboard = () => {
   }, [logs, selectedOrganization]);
 
   const fetchLogs = useCallback(async () => {
-    if (!selectedOrganization) return;
-
     try {
-      const response = await getLogs(selectedOrganization._id);
+      const orgId = selectedOrganization ? selectedOrganization._id : undefined;
+      const response = await getLogs(orgId);
       setLogs(response.data);
 
       // Calculate total duration from all completed logs
@@ -192,19 +190,14 @@ const Dashboard = () => {
 
   // Initial data fetch
   useEffect(() => {
-    if (selectedOrganization) {
     fetchTodayLog();
     fetchLogs();
-
-    // Refresh data every 5 minutes instead of every minute
     const refreshInterval = setInterval(() => {
       fetchTodayLog();
       fetchLogs();
-    }, 300000); // Changed from 60000 to 300000 (5 minutes)
-
+    }, 300000);
     return () => clearInterval(refreshInterval);
-    }
-  }, [fetchTodayLog, fetchLogs, selectedOrganization]);
+  }, [fetchTodayLog, fetchLogs]);
 
   useEffect(() => {
     // Filter logs based on search query
@@ -246,15 +239,10 @@ const Dashboard = () => {
   };
 
   const handleTimeIn = async () => {
-    if (!selectedOrganization) {
-      showNotification('Please select an organization first', 'error');
-      return;
-    }
-
     setIsLoading(true);
     try {
-      console.log('Recording time in...');
-      await timeIn({ description, organizationId: selectedOrganization._id });
+      const orgId = selectedOrganization ? selectedOrganization._id : undefined;
+      await timeIn({ description, organizationId: orgId });
       setDescription('');
       showNotification('Time In recorded successfully');
       await fetchTodayLog();
@@ -268,15 +256,10 @@ const Dashboard = () => {
   };
 
   const handleTimeOut = async () => {
-    if (!selectedOrganization) {
-      showNotification('Please select an organization first', 'error');
-      return;
-    }
-
     setIsLoading(true);
     try {
-      console.log('Recording time out...');
-      await timeOut({ description, organizationId: selectedOrganization._id });
+      const orgId = selectedOrganization ? selectedOrganization._id : undefined;
+      await timeOut({ description, organizationId: orgId });
       setDescription('');
       showNotification('Time Out recorded successfully');
       await fetchTodayLog();
@@ -349,7 +332,7 @@ const Dashboard = () => {
 
     setIsLoading(true);
     try {
-      await axios.delete(`/api/intern-logs/${logToDelete._id}`);
+      await deleteLog(logToDelete._id);
       showNotification('Log deleted successfully');
       await fetchLogs();
       setIsDeleteDialogOpen(false);
@@ -367,7 +350,27 @@ const Dashboard = () => {
     setIsDeleteDialogOpen(true);
   };
 
-  console.log('Current state:', { todayLog, logs, currentDuration });
+  // console.log('Current state:', { todayLog, logs, currentDuration });
+
+  // Split logs into organization and personal logs
+  const orgLogs = logs.filter(log => log.organization);
+  const personalLogs = logs.filter(log => !log.organization);
+
+  // Pagination for org logs
+  const [orgPage, setOrgPage] = useState(1);
+  const [orgEntriesPerPage, setOrgEntriesPerPage] = useState(10);
+  const orgIndexOfLastEntry = orgPage * orgEntriesPerPage;
+  const orgIndexOfFirstEntry = orgIndexOfLastEntry - orgEntriesPerPage;
+  const orgCurrentEntries = orgLogs.slice(orgIndexOfFirstEntry, orgIndexOfLastEntry);
+  const orgTotalPages = Math.ceil(orgLogs.length / orgEntriesPerPage);
+
+  // Pagination for personal logs
+  const [personalPage, setPersonalPage] = useState(1);
+  const [personalEntriesPerPage, setPersonalEntriesPerPage] = useState(10);
+  const personalIndexOfLastEntry = personalPage * personalEntriesPerPage;
+  const personalIndexOfFirstEntry = personalIndexOfLastEntry - personalEntriesPerPage;
+  const personalCurrentEntries = personalLogs.slice(personalIndexOfFirstEntry, personalIndexOfLastEntry);
+  const personalTotalPages = Math.ceil(personalLogs.length / personalEntriesPerPage);
 
   return (
     <div>
@@ -540,49 +543,13 @@ const Dashboard = () => {
                 </CardContent>
               </StyledCard>
 
-              {/* Time Log History Card */}
-              <StyledCard>
-                <CardContent>
-                  <Stack spacing={3}>
-                    <Box display="flex" justifyContent="space-between" alignItems="center">
-                      <Typography variant="h5" component="h2">
-                        Time Log History
-                      </Typography>
-                      <HistoryIcon color="primary" fontSize="large" />
-                    </Box>
-                <Divider />
-                
-                    <Box display="flex" justifyContent="space-between" alignItems="center" gap={2}>
-                      <Box display="flex" alignItems="center" gap={2}>
-                        <Typography>Show</Typography>
-                        <FormControl sx={{ minWidth: 100 }}>
-                    <Select
-                      value={entriesPerPage}
-                      onChange={handleEntriesPerPageChange}
-                            size="small"
-                    >
-                            <MenuItem value={5}>5</MenuItem>
-                            <MenuItem value={10}>10</MenuItem>
-                    </Select>
-                        </FormControl>
-                        <Typography>entries</Typography>
-                      </Box>
-
-                      <TextField
-                      placeholder="Search logs..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                        size="small"
-                        InputProps={{
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <SearchIcon />
-                            </InputAdornment>
-                          ),
-                        }}
-                      />
-                    </Box>
-
+              {/* Organization Logs Section */}
+              {selectedOrganization && orgLogs.length > 0 && (
+                <StyledCard sx={{ mb: 3 }}>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Organization Time Logs
+                    </Typography>
                     <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
                       <Table stickyHeader>
                         <TableHead>
@@ -597,99 +564,139 @@ const Dashboard = () => {
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {currentEntries.map((log) => (
-                            <TableRow
-                              key={log._id}
-                              hover
-                              sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-                            >
+                          {orgCurrentEntries.map((log) => (
+                            <TableRow key={log._id} hover>
                               <TableCell>{new Date(log.date).toLocaleDateString()}</TableCell>
                               <TableCell>{formatTimeOnly(log.timeIn)}</TableCell>
                               <TableCell>{log.timeOut ? formatTimeOnly(log.timeOut) : '-'}</TableCell>
                               <TableCell>{log.totalHours ? formatDuration(log.totalHours) : '-'}</TableCell>
+                              <TableCell><Typography noWrap>{log.description || '-'}</Typography></TableCell>
                               <TableCell>
-                                <Typography noWrap>{log.description || '-'}</Typography>
+                                <Chip label={log.status} color={log.status === 'ongoing' ? 'success' : 'primary'} size="small" />
                               </TableCell>
-                              <TableCell>
-                                <Chip
-                                  label={log.status}
-                                  color={log.status === 'ongoing' ? 'success' : 'primary'}
-                                  size="small"
-                                />
-                              </TableCell>
+                             
                               <TableCell>
                                 <Stack direction="row" spacing={1}>
                                   <Tooltip title="Edit log">
-                                    <IconButton
-                                      size="small"
-                                      onClick={() => openEditModal(log)}
-                                      color="primary"
-                                    >
+                                    <IconButton size="small" onClick={() => openEditModal(log)} color="primary">
                                       <EditIcon />
                                     </IconButton>
-                              </Tooltip>
+                                  </Tooltip>
                                   <Tooltip title="Delete log">
                                     <span>
-                                <IconButton
-                                        size="small"
-                                  onClick={() => openDeleteDialog(log)}
-                                        color="error"
-                                        disabled={log.status === 'ongoing'}
-                                      >
+                                      <IconButton size="small" onClick={() => openDeleteDialog(log)} color="error" disabled={log.status === 'ongoing'}>
                                         <DeleteIcon />
                                       </IconButton>
                                     </span>
-                              </Tooltip>
+                                  </Tooltip>
                                 </Stack>
                               </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
-                  </Table>
+                      </Table>
                     </TableContainer>
-
                     <Box display="flex" justifyContent="space-between" alignItems="center">
                       <Typography variant="body2" color="text.secondary">
-                    Showing {indexOfFirstEntry + 1} to {Math.min(indexOfLastEntry, filteredLogs.length)} of {filteredLogs.length} entries
+                        Showing {orgIndexOfFirstEntry + 1} to {Math.min(orgIndexOfLastEntry, orgLogs.length)} of {orgLogs.length} entries
                       </Typography>
-                  
                       <Stack direction="row" spacing={1}>
-                    <IconButton
-                          onClick={() => handlePageChange(null, currentPage - 2)}
-                          disabled={currentPage === 1}
-                          size="small"
-                        >
+                        <IconButton onClick={() => setOrgPage(p => Math.max(1, p - 1))} disabled={orgPage === 1} size="small">
                           <ChevronLeftIcon />
                         </IconButton>
-                    {[...Array(totalPages)].map((_, index) => (
-                      <Button
-                        key={index + 1}
-                            onClick={() => handlePageChange(null, index + 1)}
-                            variant={currentPage === index + 1 ? 'contained' : 'outlined'}
-                            size="small"
-                            sx={{ minWidth: 'auto' }}
-                      >
-                        {index + 1}
-                      </Button>
-                    ))}
-                    <IconButton
-                          onClick={() => handlePageChange(null, currentPage)}
-                          disabled={currentPage === totalPages}
-                          size="small"
-                        >
+                        <Typography>{orgPage} / {orgTotalPages || 1}</Typography>
+                        <IconButton onClick={() => setOrgPage(p => Math.min(orgTotalPages, p + 1))} disabled={orgPage === orgTotalPages} size="small">
                           <ChevronRightIcon />
                         </IconButton>
                       </Stack>
+                      <FormControl sx={{ minWidth: 80 }} size="small">
+                        <Select value={orgEntriesPerPage} onChange={e => { setOrgEntriesPerPage(Number(e.target.value)); setOrgPage(1); }}>
+                          <MenuItem value={5}>5</MenuItem>
+                          <MenuItem value={10}>10</MenuItem>
+                          <MenuItem value={25}>25</MenuItem>
+                        </Select>
+                      </FormControl>
                     </Box>
+                  </CardContent>
+                </StyledCard>
+              )}
 
-                {filteredLogs.length === 0 && (
-                      <Typography color="text.secondary" align="center">
-                    No logs found matching your search
+              {/* Personal Logs Section */}
+              {personalLogs.length > 0 && (
+                <StyledCard>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Personal Time Logs
+                    </Typography>
+                    <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
+                      <Table stickyHeader>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Date</TableCell>
+                            <TableCell>Time In</TableCell>
+                            <TableCell>Time Out</TableCell>
+                            <TableCell>Duration</TableCell>
+                            <TableCell>Description</TableCell>
+                            <TableCell>Status</TableCell>
+                            <TableCell>Actions</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {personalCurrentEntries.map((log) => (
+                            <TableRow key={log._id} hover>
+                              <TableCell>{new Date(log.date).toLocaleDateString()}</TableCell>
+                              <TableCell>{formatTimeOnly(log.timeIn)}</TableCell>
+                              <TableCell>{log.timeOut ? formatTimeOnly(log.timeOut) : '-'}</TableCell>
+                              <TableCell>{log.totalHours ? formatDuration(log.totalHours) : '-'}</TableCell>
+                              <TableCell><Typography noWrap>{log.description || '-'}</Typography></TableCell>
+                              <TableCell>
+                                <Chip label={log.status} color={log.status === 'ongoing' ? 'success' : 'primary'} size="small" />
+                              </TableCell>
+                              <TableCell>
+                                <Stack direction="row" spacing={1}>
+                                  <Tooltip title="Edit log">
+                                    <IconButton size="small" onClick={() => openEditModal(log)} color="primary">
+                                      <EditIcon />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Delete log">
+                                    <span>
+                                      <IconButton size="small" onClick={() => openDeleteDialog(log)} color="error" disabled={log.status === 'ongoing'}>
+                                        <DeleteIcon />
+                                      </IconButton>
+                                    </span>
+                                  </Tooltip>
+                                </Stack>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2" color="text.secondary">
+                        Showing {personalIndexOfFirstEntry + 1} to {Math.min(personalIndexOfLastEntry, personalLogs.length)} of {personalLogs.length} entries
                       </Typography>
-                )}
-              </Stack>
-                </CardContent>
-              </StyledCard>
+                      <Stack direction="row" spacing={1}>
+                        <IconButton onClick={() => setPersonalPage(p => Math.max(1, p - 1))} disabled={personalPage === 1} size="small">
+                          <ChevronLeftIcon />
+                        </IconButton>
+                        <Typography>{personalPage} / {personalTotalPages || 1}</Typography>
+                        <IconButton onClick={() => setPersonalPage(p => Math.min(personalTotalPages, p + 1))} disabled={personalPage === personalTotalPages} size="small">
+                          <ChevronRightIcon />
+                        </IconButton>
+                      </Stack>
+                      <FormControl sx={{ minWidth: 80 }} size="small">
+                        <Select value={personalEntriesPerPage} onChange={e => { setPersonalEntriesPerPage(Number(e.target.value)); setPersonalPage(1); }}>
+                          <MenuItem value={5}>5</MenuItem>
+                          <MenuItem value={10}>10</MenuItem>
+                          <MenuItem value={25}>25</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Box>
+                  </CardContent>
+                </StyledCard>
+              )}
             </Stack>
           </Grid>
 

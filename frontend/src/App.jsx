@@ -11,6 +11,8 @@ import LeaderDashboard from './components/LeaderDashboard';
 import PrivateRoute from './components/PrivateRoute';
 import JoinOrganization from './pages/JoinOrganization';
 import LeaderAnalysis from './components/LeaderAnalysis';
+import ForgotPassword from './components/ForgotPassword';
+import ResetPassword from './components/ResetPassword';
 
 // Add favicon and page title
 if (typeof document !== 'undefined') {
@@ -31,6 +33,8 @@ const App = () => {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password/:token" element={<ResetPassword />} />
             <Route path="/join/:inviteCode" element={<JoinOrganization />} />
             <Route path="/join-organization/:inviteCode" element={<JoinOrganization />} />
             <Route path="/join-organization/org/:inviteCode" element={<JoinOrganization />} />

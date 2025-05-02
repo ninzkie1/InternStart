@@ -9,7 +9,7 @@ const internLogSchema = new mongoose.Schema({
   organization: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Organization',
-    required: true
+    required: false
   },
   timeIn: {
     type: Date,
